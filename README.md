@@ -1,5 +1,5 @@
 
-# Fall 2025 TIDYVERSE
+# Fall2025TIDYVERSE
 
 Repository for tidyverse create and extend assignments for DATA 607
 
@@ -9,6 +9,6 @@ Add a few lines to this readme with your name, the api you selected, and a descr
 
 # List of Projects
 
-1. Professor George Hagstrom, EPA AQS API <https://aqs.epa.gov/aqsweb/documents/data_api.html>
+1. George Hagstrom, EPA AQS API <https://aqs.epa.gov/aqsweb/documents/data_api.html>
 
 
