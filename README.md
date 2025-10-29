@@ -9,6 +9,7 @@ Add a few lines to this readme with your name, the api you selected, and a descr
 
 # List of Projects
 
-1. Prof. George Hagstrom, EPA AQS API <https://aqs.epa.gov/aqsweb/documents/data_api.html>
+1. Prof. George I. Hagstrom, EPA AQS API <https://aqs.epa.gov/aqsweb/documents/data_api.html>
+
 
 
