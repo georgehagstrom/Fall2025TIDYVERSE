@@ -1,5 +1,5 @@
 
-# Fall2025TIDYVERSE
+# Fall 2025 TIDYVERSE
 
 Repository for tidyverse create and extend assignments for DATA 607
 
