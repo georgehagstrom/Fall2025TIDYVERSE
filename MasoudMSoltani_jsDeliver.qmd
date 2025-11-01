@@ -1,0 +1,246 @@
+---
+title: "jsDelivr API Vignette"
+author: "Masoud Mahdisoltani"
+date: "`r Sys.Date()`"
+format: html
+editor: source
+editor_options: 
+  chunk_output_type: console
+execute:
+  warning: false
+  message: false
+---
+
+## Introduction
+
+Using `httr2` we can *get* data from the jsDelivr API. jsDelivr is a free CDN for npm and GitHub packages that serves over 150 billion requests per month. Their data API provides detailed information about packages, versions, files, and download statistics. The documentation for this API is located here: [https://www.jsdelivr.com/docs/data.jsdelivr.com](https://www.jsdelivr.com/docs/data.jsdelivr.com).
+
+The question I want to explore is: **How do download statistics and version distributions of popular JavaScript libraries reflect real-world web development trends and challenges?**
+
+## Accessing the API to Analyze Popular JavaScript Packages
+
+The goal of this code will be to explore several popular JavaScript libraries (jQuery, React, Vue.js, Bootstrap, etc.), analyze their download statistics and usage patterns to understand current trends in web development.
+
+First, let's load the necessary libraries and configure the API:
+
+```{r}
+#| echo: true
+library(httr2)
+library(tidyverse)
+library(jsonlite)
+library(lubridate)
+library(scales)
+
+# No API key required
+jsdelivr_base_url <- "https://data.jsdelivr.com/v1"
+
+jsdelivr_req <- request(jsdelivr_base_url)
+jsdelivr_req
+```
+
+Let's pick some of the more popular packages:
+
+```{r}
+popular_packages <- c("jquery", "react", "vue", "bootstrap", "lodash")
+```
+
+Exploring basic package information for these libraries:
+
+```{r}
+#| echo: true
+
+get_package_info <- \(package_name, base_request = jsdelivr_req) {
+  response <- base_request %>%
+    req_url_path_append("package", "npm", package_name) %>%
+    req_perform()
+  
+  package_data <- resp_body_json(response)
+  
+  list(
+    name = package_name,
+    latest_version = package_data$tags$latest %||% "Unknown",
+    total_versions = length(package_data$versions),
+    versions = head(package_data$versions, 10)
+  )
+}
+
+package_info_list <- map(popular_packages, \(pkg) {
+  Sys.sleep(0.1) # being respectful 
+  get_package_info(pkg, jsdelivr_req)
+})
+
+package_info <- map(package_info_list, \(pkg) {
+  tibble(
+    package = pkg$name,
+    latest_version = pkg$latest_version,
+    total_versions = pkg$total_versions
+  ) 
+}) %>%
+  list_rbind()
+
+package_info
+```
+
+Now let's get download statistics for these packages:
+
+```{r}
+#| echo: true
+
+get_package_stats <- \(package_name, base_request = jsdelivr_req) {
+  response <- base_request %>%
+    req_url_path_append("package", "npm", package_name, "stats") %>%
+    req_perform()
+  
+  stats_data <- resp_body_json(response)
+  
+  list(
+    name = package_name,
+    rank = stats_data$rank %||% NA,
+    type_rank = stats_data$typeRank %||% NA,
+    total_hits = stats_data$total %||% 0,
+    versions = stats_data$versions %||% list()
+  )
+}
+
+stats_list <- map(popular_packages, \(pkg) {
+  Sys.sleep(0.1)
+  get_package_stats(pkg, jsdelivr_req)
+})
+
+package_stats <- map(stats_list, \(pkg) {
+  tibble(
+    package = pkg$name,
+    rank = pkg$rank %||% NA,
+    type_rank = pkg$type_rank %||% NA,
+    total_hits = pkg$total_hits
+  )
+}) %>%
+  list_rbind() %>%
+  arrange(rank)
+
+package_stats
+```
+
+Then visualize the popularity of these packages:
+
+```{r}
+#| echo: true
+#| fig-width: 8
+#| fig-height: 6
+
+package_stats %>%
+  filter(!is.na(total_hits) & total_hits > 0) %>%
+  mutate(
+    package = fct_reorder(package, total_hits),
+    hits_millions = total_hits / 1e6
+  ) %>%
+  ggplot(aes(x = package, y = hits_millions)) +
+  geom_col(fill = "deepskyblue3", alpha = 0.8) +
+  geom_text(aes(label = paste0(round(hits_millions, 1), "M")), 
+            hjust = 1, size = 3, fontface = "bold", color = "white") +
+  coord_flip() +
+  labs(
+    title = "Total Downloads (Millions) of Popular JavaScript Libraries",
+    subtitle = "Via jsDelivr CDN (All Time)",
+    caption = "Data source: jsDelivr API"
+  ) +
+  ggthemes::theme_calc() +
+  theme(
+    plot.title = element_text(size = 14, face = "bold"),
+    plot.subtitle = element_text(size = 12),
+    plot.margin = margin(2,20,3,4, "mm"),
+    axis.title.x = element_blank(),
+    axis.title.y = element_blank()
+  ) +
+  ggbreak::scale_y_break(c(2e3,15e3), expand = expansion(0.05, 0))
+```
+
+We can get the version distribution patterns for the packages (selecting the top 3):
+
+```{r}
+#| echo: true
+
+get_version_details <- \(package_name, base_request = jsdelivr_req) {
+  response <- base_request %>%
+    req_url_path_append("package", "npm", package_name, 
+                        "stats", "version") %>%
+    req_perform()
+  
+  stats_data <- resp_body_json(response)
+  
+  if (!is.null(stats_data$versions) && length(stats_data$versions) > 0) {
+    version_stats <- map(names(stats_data$versions), \(version_name) {
+      version_data <- stats_data$versions[[version_name]]
+      tibble(
+        package = package_name,
+        version = version_name,
+        hits = version_data$total %||% 0
+      )
+    }) %>%
+    list_rbind()
+    
+    return(version_stats)
+  } else {
+    return(tibble(package = package_name, version = character(0), 
+                 hits = numeric(0), bandwidth = numeric(0)))
+  }
+}
+
+
+key_packages <- package_stats %>% 
+  slice_max(total_hits, n = 3) %>% 
+  pull(package)
+
+version_details_list <- map(key_packages, \(pkg) {
+  Sys.sleep(0.2)
+  get_version_details(pkg, jsdelivr_req)
+})
+
+
+all_version_data <- bind_rows(version_details_list) %>%
+  filter(hits > 0) %>%
+  slice_max(hits, n = 10, by = package)
+
+all_version_data
+```
+
+And visualizing version popularity:
+
+```{r}
+#| echo: true
+#| fig-width: 8
+#| fig-height: 5
+
+all_version_data %>%
+  mutate(
+    hits_millions = hits / 1e6,
+    version_short = str_trunc(version, 10)
+  ) %>%
+  ggplot(aes(x = tidytext::reorder_within(version_short, hits, package), 
+             y = hits_millions)) +
+  geom_col(aes(fill = package), alpha = 0.8) +
+  tidytext::scale_x_reordered() +
+  coord_flip() +
+  facet_wrap(~package, scales = "free") +
+  labs(
+    title = "Most Popular Versions by Package",
+    subtitle = "Top 10 versions for each library",
+    x = "Version",
+    y = "Downloads (Millions)",
+    caption = "Data source: jsDelivr API"
+  ) +
+  ggthemes::theme_calc() +
+  theme(
+    legend.position = "none",
+    plot.title = element_text(size = 14, face = "bold"),
+    strip.text = element_text(face = "bold")
+  )
+```
+
+A lot more can be done; we can find the most popular packages, or find the month that more packages see new releases, and much more.
+
+## Conclusion
+
+Bootstrap's download numbers are staggering, over 16 billion downloads completely dwarf jQuery's 1.5 billion, a difference of more than 10x. What's particularly striking is that jQuery, despite being widely considered legacy technology, still maintains such high download volumes; countless production sites continue to rely on jQuery, and migrating away isn't always practical or prioritized.
+
+The version fragmentation across these libraries tells another important story. Rather than seeing all downloads concentrated on the latest versions, we see substantial usage spread across multiple releases. This explains why library maintainers invest so heavily in backwards compatibility, not just within their own package but also with other major packages, knowing that developers often can't or won't upgrade every dependency immediately when new versions are released.
