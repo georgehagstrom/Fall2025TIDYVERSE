@@ -13,3 +13,5 @@ Add a few lines to this readme with your name, the api you selected, and a descr
     - Explores download statistics and version fragmentation patterns for popular JS libraries.
 3. Michael Drake, Open Charge API <https://openchargemap.org/site/develop/api#/>
     - Downloaded EV charger information for Phoenix, AZ and visualized operator distribution.
+4. Abeer Shariff, Open Library API (Authors) <https://openlibrary.org/dev/docs/api/authors>
+    - Open Library (Authors) searches for works by Author.
