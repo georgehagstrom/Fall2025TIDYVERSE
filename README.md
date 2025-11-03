@@ -8,18 +8,24 @@ Add a few lines to this readme with your name, the api you selected, and a descr
 
 # List of Projects
 
-1. Prof. George I. Hagstrom, EPA AQS API [https://aqs.epa.gov/aqsweb/documents/data\_api.html](https://aqs.epa.gov/aqsweb/documents/data_api.html)
-2. Masoud Mahdisoltani, jsDelivr API [https://www.jsdelivr.com/docs/data.jsdelivr.com](https://www.jsdelivr.com/docs/data.jsdelivr.com)
+1.  Prof. George I. Hagstrom, EPA AQS API <https://aqs.epa.gov/aqsweb/documents/data_api.html>
 
-   * Explores download statistics and version fragmentation patterns for popular JS libraries.
+2.  Masoud Mahdisoltani, jsDelivr API <https://www.jsdelivr.com/docs/data.jsdelivr.com>
 
-3. Michael Drake, Open Charge API [https://openchargemap.org/site/develop/api#/](https://openchargemap.org/site/develop/api#/)
+    -   Explores download statistics and version fragmentation patterns for popular JS libraries.
 
-   * Downloaded EV charger information for Phoenix, AZ and visualized operator distribution.
+3.  Michael Drake, Open Charge API <https://openchargemap.org/site/develop/api#/>
 
-4. Abeer Shariff, Open Library API (Authors) [https://openlibrary.org/dev/docs/api/authors](https://openlibrary.org/dev/docs/api/authors)
+    -   Downloaded EV charger information for Phoenix, AZ and visualized operator distribution.
 
-   * Open Library (Authors) searches for works by Author.
-   
-5. Hristiyana Yaneva, NHL API [https://gitlab.com/dword4/nhlapi](https://gitlab.com/dword4/nhlapi)
-   * Analyzed NHL division competitiveness using current season standings data and visualized point spreads across divisions.
+4.  Abeer Shariff, Open Library API (Authors) <https://openlibrary.org/dev/docs/api/authors>
+
+    -   Open Library (Authors) searches for works by Author.
+
+5.  Hristiyana Yaneva, NHL API <https://gitlab.com/dword4/nhlapi>
+
+    -   Analyzed NHL division competitiveness using current season standings data and visualized point spreads across divisions.
+
+6.  Zoran Glisovic, Open-Meteo API [ttps://open-meteo.com/en/docs/historical-weather-api](https://open-meteo.com/en/docs/historical-weather-api){.uri}
+
+    -   Los Angeles Monthly Average Temperature Trends (1975–2024)
