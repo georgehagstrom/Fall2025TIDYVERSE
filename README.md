@@ -29,3 +29,7 @@ Add a few lines to this readme with your name, the api you selected, and a descr
 6.  Zoran Glisovic, Open-Meteo API [ttps://open-meteo.com/en/docs/historical-weather-api](https://open-meteo.com/en/docs/historical-weather-api){.uri}
 
     -   Los Angeles Monthly Average Temperature Trends (1975–2024)
+
+7.  Tatyana Titova, USGS API <https://earthquake.usgs.gov/fdsnws/event/1/>
+
+    -   Explored relationship between magnitude and depth for earthquake data over the past 12 months.
