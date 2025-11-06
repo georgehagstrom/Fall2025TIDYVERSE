@@ -33,3 +33,8 @@ Add a few lines to this readme with your name, the api you selected, and a descr
 7.  Tatyana Titova, USGS API <https://earthquake.usgs.gov/fdsnws/event/1/>
 
     -   Explored relationship between magnitude and depth for earthquake data over the past 12 months.
+    
+8. Denise Garbato — Fruityvice API <https://www.fruityvice.com/>
+
+   - Analyzed nutritional data for fruits using the Fruityvice API to identify diabetes-friendly options (low sugar and carbohydrates per 100g).
+

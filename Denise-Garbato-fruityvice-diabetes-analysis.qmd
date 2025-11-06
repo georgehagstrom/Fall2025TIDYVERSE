@@ -1,0 +1,194 @@
+---
+title: "Tidyverse API Vignette — Fruits"
+author: "Denise Garbato"
+format: pdf
+editor: visual
+---
+
+### Introduction
+
+Fruits vary widely in their sugar and carbohydrate content, which is important for individuals managing Type II diabetes. The Fruityvice API provides structured nutritional data for fruits, including calories, sugar, fat, carbohydrates, and protein per 100 grams.\
+API link: [https://www.fruityvice.com/](#0)
+
+**Research question:** Which fruits from the Fruityvice API are the most diabetes-friendly — meaning lowest in both sugar and carbohydrates?
+
+Load packages
+
+```{r}
+library(httr2)     # for API requests
+library(tidyverse)
+
+```
+
+### Retrieve Data Using httr2
+
+Below, I use `httr2` to send a GET request to the Fruityvice API and retrieve all fruit nutrition data.
+
+```{r}
+# Request fruit data from Fruityvice API
+req <- request("https://www.fruityvice.com/api/fruit/all")
+
+# Perform request
+res <- req_perform(req)
+
+# Parse JSON response
+data <- res |> resp_body_json()
+
+
+```
+
+### Convert JSON to Tibble
+
+```{r}
+# Converts the list returned by the API into a tibble (data frame) column named `raw`
+fruits <- tibble(raw = data) |>     
+
+  # Expand (unnest) the `raw` column so each element of the JSON becomes its own column 
+  unnest_wider(raw) |>              
+
+  # The `nutritions` column still contains nested data, so expand those nutrition fields too
+  unnest_wider(nutritions)  
+
+# Removes id 
+fruits <- fruits |> select(-id) 
+
+head(fruits)
+
+
+```
+
+```{r}
+dim(fruits)
+```
+
+### Data Analysis
+
+Both carbohydrates and sugar values provided by the Fruityvice API are reported in grams per 100 grams of fruit, following standard nutrition labeling conventions. Sugar represents the portion of carbohydrates that comes from natural sugars.
+
+```{r}
+fruits |> 
+  select(name, carbohydrates, sugar) |> 
+  head()
+
+
+```
+
+```{r}
+names(fruits)
+```
+
+Since I have Type II diabetes, I am interested in fruits that are lower in sugar and total carbohydrates. Fruityvice provides both values per 100 grams, allowing me to identify fruits that may have a milder impact on blood glucose.
+
+```{r}
+fruits <- fruits  |> 
+  mutate(
+    sugar_carb_ratio = sugar / carbohydrates, # A lower sugar-to-carb ratio is generally better for diabetics
+    low_sugar = sugar <= 6,             # threshold for low sugar
+    low_carbs = carbohydrates <= 12,    # threshold for lower carbs
+    diabetes_friendly = low_sugar & low_carbs
+  )  |> 
+  arrange(sugar_carb_ratio)
+
+fruits |>  filter(diabetes_friendly)
+
+
+```
+
+The scatter plot below shows that only a subset of fruits fall into the lower-sugar, lower-carbohydrate range that may be more suitable for individuals managing Type II diabetes.
+
+```{r}
+fruits |>
+  ggplot(aes(x = carbohydrates, y = sugar)) +
+  
+  # points colored by diabetes friendly status
+  geom_point(aes(color = diabetes_friendly), size = 3) +
+  
+  scale_color_manual(
+    values = c("FALSE" = "navy", "TRUE" = "lightblue"),
+    labels = c("FALSE" = "Other fruits", "TRUE" = "Diabetes-friendly")
+  ) +
+  
+  labs(
+    title = "Carbohydrates vs Sugar Content in Fruits",
+    subtitle = "Diabetes-friendly fruits tend to be lower in sugar and carbohydrates",
+    x = "Carbohydrates (g per 100g)",
+    y = "Sugar (g per 100g)",
+    color = ""
+  ) +
+  
+  theme_minimal(base_size = 13)
+
+
+```
+
+**Of the 49 fruits in the fruits tibble only 17 are diabetes friendly.**
+
+```{r}
+# create a diabetes_friendly tibble
+diabetes_friendly_fruits<- fruits |>  filter(diabetes_friendly)
+
+```
+
+**Of the diabetes_friendly_fruits, what are the 10 lowest in sugar?**
+
+```{r}
+
+
+
+diabetes_friendly_fruits |>
+  select(name, sugar, carbohydrates, sugar_carb_ratio, calories) |>
+  arrange(sugar) |>
+  slice_head(n = 10) |>
+  ggplot(aes(x = sugar, y = fct_reorder(name, sugar))) +
+  geom_col(fill = "steelblue") +
+  geom_text(aes(label = round(sugar, 2), x = sugar + 0.1),  # add slight offset
+            size = 4, hjust = 0) +
+ 
+  labs(
+    title = "Lowest Sugar Diabetes-Friendly Fruits",
+    x = "Sugar (g per 100g)",
+    y = "Fruit"
+  ) +
+  theme_minimal(base_size = 13) +
+  xlim(0, max(diabetes_friendly_fruits$sugar) + 1)  # add space for labels
+
+
+
+
+```
+
+Earlier I created a sugar to carb ratio. A lower value is better for diabetics. From looking at the lowest ten in sugar, I see that some of those lowest in sugar have varying values which prompts the question: Of the diabetic friendly fruits what are ten lowest in sugar to carb ratio?
+
+```{r}
+
+
+diabetes_friendly_fruits |>
+  select(name, sugar, carbohydrates, sugar_carb_ratio, calories) |>
+  arrange(sugar_carb_ratio) |>
+  slice_head(n = 10) |>
+  ggplot(aes(x = sugar_carb_ratio, 
+             y = fct_reorder(name, sugar_carb_ratio))) +
+  geom_col(fill = "steelblue") +
+  geom_text(aes(label = round(sugar_carb_ratio, 2), 
+                x = sugar_carb_ratio + 0.05), 
+            size = 4, hjust = 0) +
+ 
+  labs(
+    title = "Lowest Sugar-to-Carbohydrate Ratio (Diabetes-Friendly Fruits)",
+    subtitle = "Lower ratios may indicate better blood-sugar response",
+    x = "Sugar / Carbohydrate Ratio",
+    y = "Fruit"
+  ) +
+  theme_minimal(base_size = 13) +
+  xlim(0, max(diabetes_friendly_fruits$sugar_carb_ratio) + 0.5)
+
+
+```
+
+## 5. Conclusion
+
+This analysis used the Fruityvice API to identify fruits with lower sugar and carbohydrate content, which may be better options for individuals managing Type II diabetes. Out of 49 fruits, 17 met the diabetes-friendly thresholds (≤ 6g sugar and ≤ 12g carbohydrates per 100g). Among these, gooseberry, horned melon, avocado, lime, and lemon ranked lowest in sugar and also demonstrated low sugar-to-carbohydrate ratios. These results show how API data and tidyverse tools can support nutrition-related decision-making.
+
+I also discovered fruits I had never tried before, including pitahaya (dragon fruit), which is surprisingly low in sugar compared to many tropical fruits. Based on this analysis, I plan to explore more of these fruits in local Asian markets.
+
+.
