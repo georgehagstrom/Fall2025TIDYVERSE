@@ -1,28 +1,33 @@
 ---
-title: "Los Angeles Monthly Average Temperature Trends (1975–2024)"
-author: "Zoran Glisovic"
+title: "Los Angeles Monthly Average Temperature Trends (1975-2024)"
+authors: 
+  - "Zoran Glisovic"
+  - "Masoud Mahdisoltani" 
 format:
   pdf:
-    toc: true
+    toc: false
 execute:
   echo: true
   warning: false
   message: false
-editor: source
+editor_options: 
+  chunk_output_type: console
 ---
 
 # Overview
 
-Goal: fetch hourly temperature_2m for Los Angeles (1975–2024) from the Open‑Meteo Historical Weather API with httr2, aggregate to monthly averages, and plot trends.  
+Goal: fetch hourly temperature_2m for Los Angeles (1975-2024) from the Open-Meteo Historical Weather API with httr2, aggregate to monthly averages, and plot trends.  
 Key implementation choices:
 - Request UTC timestamps, parse in UTC, then convert to America/Los_Angeles to avoid DST parsing warnings.
 - Fetch one year per request to keep responses small and reliable.
+
+Extended goal: adding rainfall data to the analysis.
 
 API docs: https://open-meteo.com/en/docs/historical-weather-api
 
 # Setup
 
-In this section, I load the required R packages. The httr2 package is used to interact with APIs, lubridate for date and time handling, and ggplot2 for visualizations.
+In this section, the required R packages are loaded. The `httr2` package is used to interact with APIs, `lubridate` for date and time handling, and `ggplot2` for visualizations.
 
 ```{r global-options}
 library(httr2)
@@ -34,22 +39,23 @@ library(ggplot2)
 library(purrr)
 ```
 
-# Acquire hourly data (UTC → local)
+# Acquire hourly data
 
-Here I build a function that sends yearly API requests to the Open-Meteo Historical Weather API for Los Angeles coordinates. To avoid data gaps due to daylight savings time, the data is requested in UTC and converted to local time afterward.
+Here, `fetch_year_utc` function sends yearly API requests to the Open-Meteo Historical Weather API for Los Angeles coordinates. To avoid data gaps due to daylight savings time, the data is requested in UTC and converted to local time afterward, to avoid dealing with daylight savings time issues.
 
 ```{r hourly-data}
 lat <- 34.0522
 lon <- -118.2437
 years <- 1975:2024
 
+
 fetch_year_utc <- function(y) {
   req <- request("https://archive-api.open-meteo.com/v1/archive") |>
     req_url_query(
       latitude = lat, longitude = lon,
-      start_date = paste0(y, "-01-01"),
-      end_date = paste0(y, "-12-31"),
-      hourly = "temperature_2m",
+      start_date = paste0(y-1, "-12-31"),
+      end_date = paste0(y+1, "-01-01"),
+      hourly = "temperature_2m,rain",
       timezone = "UTC"
     )
   resp <- req_perform(req); resp_check_status(resp)
@@ -58,101 +64,160 @@ fetch_year_utc <- function(y) {
   tibble(
     datetime_utc = ymd_hm(raw$hourly$time, tz = "UTC"),
     datetime_local = with_tz(datetime_utc, "America/Los_Angeles"),
-    t2m_c = raw$hourly$temperature_2m
+    t2m_c = raw$hourly$temperature_2m,
+    rain_in  = raw$hourly$rain / 25.4
   )
 }
 
-hourly <- map_dfr(years, ~{
+hourly <- map(years, ~{
   tryCatch({
     out <- fetch_year_utc(.x)
     Sys.sleep(0.2)
     out
   }, error = function(e) tibble())
-})
+}) %>% 
+  list_rbind()
 
-start_local <- as.POSIXct("1975-01-01 00:00:00", tz = "America/Los_Angeles")
-end_local   <- as.POSIXct("2024-12-31 23:00:00", tz = "America/Los_Angeles")
 hourly <- hourly |>
-  filter(datetime_local >= start_local, datetime_local <= end_local)
+  filter(between(year(datetime_local), min(years), max(years))) |>
+  distinct()
+
 nrow(hourly)
 ```
 
-The resulting dataset contains about 438,000 hourly records spanning 1975–2024. This data provides a continuous temperature history for Los Angeles that can be further summarized for analysis.
+The resulting dataset contains about 438,000 hourly records spanning 1975-2024. This data provides a continuous temperature and rainfall history for Los Angeles that can be further summarized for analysis.
 
+# Aggregate to monthly means
 
-# Aggregate to monthly averages
+Next, hourly observations are grouped by year and month to compute monthly and annual means for temperatures and total rainfall. This aggregation simplifies the long hourly dataset into a manageable format for visualization and trend analysis.
 
-Next, I group the hourly observations by year and month to compute monthly average temperatures in both Celsius and Fahrenheit. This aggregation simplifies the long hourly dataset into a manageable format for visualization and trend analysis.
-
-```{r monthly-mean}
+```{r monthly-annual}
 monthly <- hourly |>
   mutate(
     year = year(datetime_local),
-    month = month(datetime_local),
-    mon_lab = factor(month(datetime_local, 
-                           label = TRUE, abbr = TRUE), levels = month.abb)
+    month = month(datetime_local)
   ) |>
-  group_by(year, month, mon_lab) |>
-  summarise(tavg_c = mean(t2m_c, na.rm = TRUE), .groups = "drop") |>
-  mutate(tavg_f = tavg_c * 9/5 + 32)
+  summarize(tavg_c = mean(t2m_c, na.rm = TRUE),
+            rtot_in = sum(rain_in, na.rm = TRUE),
+            .by = c(year, month)) |>
+  mutate(tavg_f = tavg_c * 9/5 + 32, .keep = "unused")
 
-nrow(monthly)
-
-monthly
+annual <- monthly |>
+  summarise(tavg_f = mean(tavg_f, na.rm = TRUE), 
+            rtot_in = sum(rtot_in, na.rm = TRUE),
+            .by = year)
 ```
-The table shows approximately 600 monthly averages, representing 50 years of data.
+
+`r nrow(monthly)` months over the span of `r nrow(annual)` years.
 
 # Visualize
 
-Using ggplot2, I create two sets of plots. The first set shows monthly temperature trends across years for each month, and the second plot summarizes the annual averages with a fitted linear regression line.
+`ggplot2` package is used to create multiple sets of plots for rainfall and temperature, both for monthly and annual data.
 
-```{r faceted-plots, fig.width = 10, fig.height = 8, dpi = 300}
+### Temperature:
+
+```{r faceted-plots-temp, fig.width = 10, fig.height = 8, dpi = 300}
 ggplot(monthly, aes(x = year, y = tavg_f)) +
   geom_line() +
-  geom_smooth(method = "lm", se = FALSE, color = "blue") +
-  facet_wrap(~ mon_lab, ncol = 4) +
+  geom_smooth(method = "loess", se = FALSE, color = "#a52b0d") +
+  facet_wrap(~ month, ncol = 4, 
+             labeller = labeller(month = \(x) month.abb[as.numeric(x)])) +
   labs(
-    title = "Los Angeles: Monthly Average Temperature (1975–2024)",
-    x = "Year", y = "Avg temperature (°F)",
+    title = "Los Angeles: Monthly Mean Temperature (1975-2024)",
+    x = "", y = "Mean Temperature (�F)",
     caption = "Open-Meteo Historical Weather API"
   ) +
-  theme_minimal(base_size = 12) +
+  theme_bw(base_size = 12) +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
 ```
 
-```{r annual-mean, fig.width = 10, fig.height = 8, dpi = 300}
-annual <- monthly |>
-  group_by(year) |>
-  summarise(tavg_f = mean(tavg_f, na.rm = TRUE), .groups = "drop")
+These plots reveal interesting seasonal patterns in Los Angeles temperatures over time. The LOESS smoothing curves suggest some months (like April and December) may show warming trends while others (like June and September) appear relatively stable or slightly cooling. However, these are visual patterns and further analyses is needed to make more robust conclusions.
 
+```{r annual-mean-temp, fig.width = 10, fig.height = 8, dpi = 300}
 ggplot(annual, aes(x = year, y = tavg_f)) +
   geom_line() +
-  geom_smooth(method = "lm", se = FALSE, color = "blue") +
-  labs(title = "Los Angeles: Annual Average Temperature (1975–2024)",
-       x = "Year", y = "Annual avg temperature (°F)",
+  geom_smooth(method = "loess", se = FALSE, color = "#a52b0d") +
+  labs(title = "Los Angeles: Annual Mean Temperature (1975-2024)",
+       x = "", y = "Mean Temperature (�F)",
        caption = "Open-Meteo Historical Weather API") +
-  theme_minimal(base_size = 12)
+  theme_bw(base_size = 12)
 ```
-These plots make it easier to see subtle long-term changes in temperature. The blue trend lines indicate that winters have warmed slightly while some summer months appear to show mild cooling over time.
 
-```{r difference}
-trend_values <- tibble(
-  year = c(1975, 2024),
-  trend_tavg_f = predict(lm(tavg_f ~ year, data = annual),
-                         newdata = tibble(year = c(1975, 2024)))
-)
+The annual mean temperature shows considerable year-to-year variability with no significant long-term trend. The LOESS curve suggests a possible slight increase through the 2010s followed by recent cooling, but it is suspected that statistical testing would confirm this is not a significant trend.
 
-print(trend_values)
+## Rainfall:
 
-temp_diff <- diff(trend_values$trend_tavg_f)
-cat("Predicted temperature increase from 1975 to 2024 (trend line):",
-    round(temp_diff, 2), "°F\n")
+```{r faceted-plots-rain, fig.width = 10, fig.height = 8, dpi = 300}
+ggplot(monthly, aes(x = year, y = rtot_in)) +
+  geom_line() +
+  geom_smooth(method = "loess", se = FALSE, color = "#3366cc") +
+  facet_wrap(~ month, ncol = 4, 
+             labeller = labeller(month = \(x) month.abb[as.numeric(x)])) +
+  labs(
+    title = "Los Angeles: Monthly Total Rainfall (1975-2024)",
+    x = "Year", y = "Total Rainfall (in)",
+    caption = "Open-Meteo Historical Weather API"
+  ) +
+  theme_bw(base_size = 12) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
 ```
+
+These plots clearly show that outside of December to March, Los Angeles experiences very dry seasons consistently across the years. The winter months (December-March) show high variability but no clear directional trends over time.
+
+```{r annual-mean-rain, fig.width = 10, fig.height = 8, dpi = 300}
+ggplot(annual, aes(x = year, y = rtot_in)) +
+  geom_line() +
+  geom_smooth(method = "loess", se = FALSE, color = "#3366cc") +
+  labs(title = "Los Angeles: Annual Total Rainfall (1975-2024)",
+       x = "Year", y = "Total Rainfall (in)",
+       caption = "Open-Meteo Historical Weather API") +
+  theme_bw(base_size = 12)
+```
+
+While the LOESS curve suggests increased rainfall in recent years, this very well could be due to natural variability within Los Angeles's highly variable precipitation patterns.
+
+Looking at monthly values over the years, would be more valuable for detecting trends;
+
+```{r timeseries, fig.width = 10, fig.height = 8, dpi = 300}
+monthly |>
+  pivot_longer(rtot_in:tavg_f) |>
+ ggplot(data = _, 
+        aes(x = ymd(paste(year, month, 15)),
+            y = value)) +
+  facet_wrap(~ name, nrow = 2, scales = "free_y",
+             labeller = as_labeller(c(
+               "rtot_in" = "Total Rainfall (in)",
+               "tavg_f" = "Mean Temperature (�F)"))) +
+  geom_line() +
+  geom_smooth(method = "loess", se = FALSE, 
+              aes(color = name)) +
+  labs(title = "Los Angeles: Monthly Climate Data (1975-2024)",
+       caption = "Open-Meteo Historical Weather API", 
+       x = "", y = "") +
+  scale_color_manual(values = c("#3366cc", "#a52b0d")) +
+  theme_bw(base_size = 12) +
+  theme(legend.position = "None")
+```
+
+```{r MannKendall}
+t_mk <- Kendall::MannKendall(monthly$tavg_f)
+r_mk <- Kendall::MannKendall(monthly$rtot_in)
+
+cat("Temperature: ", round(1-t_mk$sl[1]/2,3)*100, "% confidence in ",
+ifelse(t_mk$tau[1] > 0, "upward", "downward"), " trend (t = ", 
+round(t_mk$tau[1],3), ")", sep = "")
+
+cat("Rainfall: ", round(1-r_mk$sl[1]/2,3)*100, "% confidence in ",
+ifelse(r_mk$tau[1] > 0, "upward", "downward"), " trend (t = ", 
+round(r_mk$tau[1],3), ")", sep = "")
+```
+
+These calculations, along with the last plot, show **no statistically significant trends** in either temperature or rainfall over the 50-year period. With confidence levels of 77.5% for temperature and 63.3% for rainfall (both well below the standard 95% significance threshold), the observed patterns are likely due to natural variability rather than systematic long-term trends. The very small t values (0.021 for temperature, 0.009 for rainfall) further confirm minimal directional change over time.
 
 # Conclusion
 
-Using the Open-Meteo Historical Weather API, I collected hourly temperature data for Los Angeles from 1975 through 2024 and aggregated it into monthly and annual averages. To avoid daylight savings time issues, the data was requested in UTC and then converted to local Los Angeles time.
+Using the Open-Meteo Historical Weather API, hourly temperature and rainfall data is collected for Los Angeles from 1975 through 2024 and aggregated it into monthly and annual averages.
 
-The annual linear trend shows a gradual increase in average temperature over the 50-year period. Based on the model, Los Angeles has warmed by roughly half a degree Fahrenheit since 1975. While the overall rise is modest, the monthly trend plots reveal interesting seasonal differences—winter months are getting noticeably warmer, while summer months show a small cooling trend.
+The Mann-Kendall trend analysis shows no statistically significant temperature or rainfall trends over the 50-year period (temperature: t = 0.021, 77.5% confidence; rainfall: t = 0.009, 63.3% confidence). While the LOESS smoothing curves suggest some variability over time, these patterns fall within the range of natural climate variability and do not represent statistically robust long-term trends. The monthly faceted plots reveal interesting seasonal patterns�some months show apparent warming or cooling�but without statistical significance testing on individual months, these observations remain descriptive rather than conclusive.
 
-This pattern suggests that the city’s temperature range is narrowing slightly, with milder winters and somewhat cooler peak summer periods. These results align with broader regional climate trends across Southern California, where nighttime and winter temperatures have risen faster than summer highs. Because Open-Meteo data combine reanalysis and model information, values may differ slightly from local weather station records, but the long-term direction remains clear: Los Angeles has become warmer overall, especially in the cooler months, over the past five decades.
+Additionally, 50 years represents a **relatively** short period for climate trend analysis and we might need more data to reliably separate long-term climate signals from natural multi-decadal variability cycles like the Pacific Decadal Oscillation. The absence of significant trends in this dataset may reflect both the limited temporal scope and Los Angeles's high natural climate variability.
