@@ -1,7 +1,10 @@
-
 ---
 title: "NHL API Analysis"
-author: "Hristiyana Yaneva" 
+author: 
+    - name: "Hristiyana Yaneva"
+      roles: ["Primary Author"]
+    - name: "Michael Drake"
+      roles: ["Secondary Author"]
 format: pdf
 editor: source
 ---
@@ -10,10 +13,10 @@ editor: source
 
 I've picked the NHL API (https://gitlab.com/dword4/nhlapi) which provides real-time and historical data about NHL teams, players, and games. The question I've decided to answer is: Which NHL divisions are most competitive based on point spread currently? This is always an interesting question to explore, and since we are already a month into hockey, we should be getting a more realistic picture of the divisions than if we were to gather data from after the opening week.
 
-
 # 2. Data Collection and Analysis
 
 The code uses `httr2` to send a GET request to the NHL API's standings endpoint. The `req_perform()` function executes the request, and `resp_body_json(simplifyVector = TRUE)` parses the JSON response into a dataframe. The standings data is nested, so I use `unnest()` to extract team names from the nested dataframe structure.
+
 ```{r}
 #| message: false
 library(httr2)
@@ -35,6 +38,7 @@ div_standings <- standings |>
 
 div_standings
 ```
+
 ```{r}
 standings |>
   unnest(teamName) |>
@@ -49,6 +53,7 @@ standings |>
        y = "Point Spread (1st to Last)") +
   theme_minimal()
 ```
+
 ```{r}
 #Top and bottom teams
 standings |>
@@ -89,3 +94,53 @@ standings |>
 The Central Division shows the largest point spread (11 points) between first and last place, which suggests it is the least competitive compared to other divisions. In contrast, the Atlantic Division has the smallest spread (6 points), indicating more competitiveness early in the season.
 
 The top 5 teams are tightly clustered around 18-19 points, while the bottom 5 teams show more variation (6-13 points), meaning that struggling teams are falling behind faster than top teams are pulling ahead. When we examine the top 10 teams by division, we can see that balanced representation - Central (3 teams), Metropolitan (2 teams), Atlantic (2 teams), and Pacific (3 teams) - indicating no single division is dominating too much and too early in the 2025-26 season. Overall, it appears that in the NHL we have elite teams that are emerging quickly while weaker teams are already showing signs of falling out of playoff contention.
+
+# 4. Add-On Analysis
+
+**Additional Analysis Conducted by Michael Drake**
+
+For additional analysis, I wanted to expand on Hristiyana's analysis by looking at updated standings and looking at the distribution of players who rank in the Top 100 of points with regards to team standings.
+
+```{r message=FALSE, warning=FALSE}
+library(fuzzyjoin)
+
+resp2 <- request("https://api-web.nhle.com/v1/skater-stats-leaders/20252026/2?categories=points&limit=100") |>
+  req_perform() |>
+  resp_body_json(simplifyVector = TRUE)
+
+player_points = resp2$points |>
+  unnest(firstName, lastName, teamName) |>
+  select(first_name = default, last_name = default1,
+         teamAbbrev, team_name = default2,
+         player_points = value)
+
+team_player_ranks = player_points |>
+  group_by(team_name) |>
+  summarize(num_players = n()) |>
+  arrange(desc(num_players))
+
+div_standings_updated = div_standings |>
+  regex_left_join(team_player_ranks,
+                   by = c("team" = "team_name")) |>
+  select(team, points, num_players)
+
+div_standings_updated |>
+  ggplot(aes(x = num_players, y = points)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE) +
+  labs(title = "Team Points in 2025-26 Season Compared to Number\nof Players in Top 100 of Player Points",
+       x = "Number of Players in Top 100 Player Points",
+       y = "Team Points") +
+  scale_x_continuous(breaks = c(1:6)) +
+  theme_bw()
+
+summary(lm(points ~ num_players, div_standings_updated))
+```
+
+I first pulled in data from the NHL API for the Top 100 players based on the number of player points they have through the 2025-26 season thus far. I then counted the number of players by team in the Top 100 and merged this dataframe with the `div_standings` dataframe Hristiyana generated previously. From there, I plotted the number of players in the Top 100 per team against the team points.
+
+The plot shows that, in general, as the number of players in the Top 100 rankings for player points increased on a given team, the better the team is (based on team points). I ran a linear regression model as well to further enhance this point, which resulted in the following regression equation with an $R^2$ value of 0.171. Although the $R^2$ value shows that the number of players in the Top 100 rankings of player points is does not explain much of the variation in team points, the p-value of 0.023 for the slope of 0.9342 suggests that there is a positive relationship between these 2 variables.
+
+$$
+team_{points} = 0.9342*num_{players} + 20.0526
+$$
