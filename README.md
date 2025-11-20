@@ -23,6 +23,7 @@ Add a few lines to this readme with your name, the api you selected, and a descr
 3.  Michael Drake, Open Charge API <https://openchargemap.org/site/develop/api#/>
 
     -   Downloaded EV charger information for Phoenix, AZ and visualized operator distribution.
+    -   Extended Hristiyana Yaneva's analysis of NHL API by looking at player performance.
 
 4.  Abeer Shariff, Open Library API (Authors) <https://openlibrary.org/dev/docs/api/authors>
 
