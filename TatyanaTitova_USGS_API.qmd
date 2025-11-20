@@ -1,0 +1,244 @@
+---
+title: "Tidyverse Create"
+author: "Tatyana Titova"
+format: pdf
+editor: visual
+---
+
+# Tidyverse Create
+
+This project entails selecting a website API to load data in R and visualize it.
+
+# Loading Libraries
+
+```{r}
+library(tidyr)
+library(httr2)
+library(jsonlite)
+library(tibblify)
+library(lubridate)
+library(sf)
+library(maps)
+library(purrr)
+```
+
+# Section #1
+
+## Description of the API
+
+This API is provided by USGS (United States Geological Survey) and it allows the users to query data related to worldwide earthquake events. The API provides a lot of different types of filter parameters such as magnitude, depth, time, etc. The data can be requested in a few different formats which include geojson, csv, xml, and kml.
+
+## Description of the Data
+
+The data is of worldwide earthquake events. You can learn a lot of different features about earthquakes in as much detail as you wish. You can see the maximum intensity, magnitude, depth, depth error, felt, longitude, latitude, etc.
+
+## Question to Explore
+
+What is the relationship between earthquake magnitude and depth? (In other words, would stronger earthquakes be generally deeper or shallower?)
+
+# Section #2
+
+## Downloading data
+
+#### Testing Connection
+
+Checking connection by setting up the API URL and parameters (json (1), query) and then making a blank request.
+
+```{r}
+url <- "https://earthquake.usgs.gov/fdsnws/event/1/query"
+
+testing_request <- url |> request() |>
+  req_url_query(
+    format = "geojson"
+  )
+
+testing_request
+```
+
+Connection is working. I will briefly explore what the data looks like.
+
+```{r}
+request_recent_data <- testing_request |> 
+  req_url_query(
+    limit = 20000, 
+    orderby = "time"
+  )
+```
+
+```{r}
+recent_raw_data <- request_recent_data |> 
+  req_perform() |> 
+  resp_body_json()
+```
+
+Looking at the data and data types.
+
+```{r}
+str(recent_raw_data$features[[1]], max.level = 2)
+```
+
+This appears to be a nested json structure. The data I need for my analysis is under the properties and geometry lists because I need features like magnitude (mag) and depth (coordinates). I will create parameters to parse through. I am also selecting only the features I need in my mapping because I won't need everything in my analysis. I will be indexing the coordinates as geojson uses standard coordinate format. I will first create the features list and then use it to loop through each element in the features list using the map_dfr() function.
+
+```{r}
+features_list <- recent_raw_data$features
+```
+
+```{r}
+testing_eq_df <- map_dfr(features_list, function(x) { 
+  tibble(
+    event_id = x$id,
+    mag = x$properties$mag, 
+    place = x$properties$place, 
+    time = as_datetime(x$properties$time/1000), 
+    rms = x$properties$rms,
+    sig = x$properties$sig,
+    type =  x$properties$type,
+    longitude = x$geometry$coordinates[[1]],
+    latitude = x$geometry$coordinates[[2]],
+    depth = x$geometry$coordinates[[3]]
+  )
+  })
+```
+
+```{r}
+head(testing_eq_df)
+```
+
+```{r}
+testing_eq_df |>
+  summarise( 
+    earliest_date = min(time, na.rm = TRUE), 
+    most_recent = max(time, na.rm = TRUE), 
+    total_days = as.numeric(difftime(max(time), min(time), units = "days"))
+    )
+```
+
+Now that I see what the data looks like I will create a time frame because I want to get 12 months worth of data not about a month.
+
+#### Defining Parameters in a Function to Parse Through 12 Months of Data
+
+Defining my time frame for the request. I want to look at the data from the past 12 months.
+
+```{r}
+months <- seq(from = today() - months(12), to = today(), by = "1 month")
+```
+
+Creating a tibble for data ranges that I want each request to loop through. (This API can only do 20 000 requests at a time and gives an error when attempting to do more, so I am breaking it down per month as its about 20 000 requests for that time frame).
+
+```{r}
+date_ranges <- tibble( 
+  start = format(months, "%Y-%m-01"), 
+  end = format((months + months(1)) - days(1), "%Y-%m-%d"))
+```
+
+Creating a function to intake my specified date parameters. I will include the request and the extraction tibble inside so I can loop it for each month and get an entire year's worth of data.
+
+```{r}
+monthly_data <- function(start_date, end_date) { 
+  url <- "https://earthquake.usgs.gov/fdsnws/event/1/query"
+  
+  req <- url |> 
+    request() |> 
+    req_url_query(
+      format  = "geojson", 
+      starttime = start_date, 
+      endtime= end_date, 
+      limit = 20000, 
+      orderby = "time"
+    ) 
+  
+  raw_data <- req |> 
+    req_perform() |> 
+    resp_body_json()
+  
+  
+  map_dfr(raw_data$features, function(x){ 
+  tibble(
+    event_id = x$id,
+    mag = x$properties$mag, 
+    place = x$properties$place, 
+    time = as_datetime(x$properties$time/1000), 
+    rms = x$properties$rms,
+    sig = x$properties$sig,
+    type =  x$properties$type,
+    longitude = x$geometry$coordinates[[1]],
+    latitude = x$geometry$coordinates[[2]],
+    depth = x$geometry$coordinates[[3]])
+    })
+   } 
+
+eq_12_months <- map2_dfr(date_ranges$start, date_ranges$end, monthly_data)
+```
+
+```{r}
+eq_12_months
+```
+
+Checking for NA values.
+
+```{r}
+colSums(is.na(eq_12_months))
+```
+
+Filtering NA values out.
+
+```{r}
+eq_df <- eq_12_months |>
+  filter(!is.na(mag), !is.na(place), !is.na(rms))
+```
+
+Double checking NA.
+
+```{r}
+sum(is.na(eq_df))
+```
+
+## Description of How the Code Works With API
+
+My code works with the API because it sets up the base URL and I built the request with the parameters or a typical query and also the parameters listed in the documentation. I basically set up a time frame since I wanted to extract for 12 months and make sure I am not maxing out my requests. I created a function that would take in the date parameters when making the requests to the API. I then mapped out all of the features I wanted to loop through to build my tibble. It all worked as I followed the documentation and was able to successfully create a tibble.
+
+## Visualizations
+
+#### Magnitude vs Depth 
+
+Creating a scatter plot to see the relationship between earthquake magnitude and depth.
+
+```{r}
+ggplot(eq_df, aes(x = mag, y = depth)) + 
+  geom_point(color = "steelblue", alpha = 0.4) + 
+  scale_x_continuous(breaks = -2:9) +
+  theme_light() + 
+  labs( 
+    title = "Earthquake Magnitude vs Depth", 
+    x = "Magnitude", 
+    y = "Depth (km)"
+    ) +
+  theme( 
+    plot.title = element_text(hjust = 0.5, face = "bold")
+    )
+```
+
+This graph appears to have two distinct peaks with a shallow depth cluster and a deep depth cluster. It appears as though shallow earthquakes occur across most of the magnitude range. They are the ones that can have the least and most impact with the magnitude range being anywhere from 0-8. The most destructive earthquakes appear to have smaller depth. As depth increases, there is less variation in magnitude. The highest peak (highest depth) occurs around magnitudes of about 4-5. This can suggest that the deepest earthquakes can only cause a "medium" amount of damage as compared to the damage shallower earthquakes can achieve.
+
+```{r}
+ggplot(eq_df, aes(y = cut(depth, breaks = 10), x = mag)) + 
+  geom_boxplot(color = "black", fill = "skyblue", outlier.color = "red") + 
+  scale_x_continuous(breaks = -2:9)  +
+  theme_light() + 
+  labs( 
+    title = "Earthquake Magnitude vs Depth", 
+    x = "Magnitude", 
+    y = "Depth Ranges (km)"
+    ) +
+  theme( 
+    plot.title = element_text(hjust = 0.5, face = "bold")
+    )
+```
+
+This graph shows a similar pattern with more details. By breaking into bins we can clearly see more clearly as to where the clusters are and how they are distributed. This visualization further confirms that for the most shallow earthquakes the magnitude range is the highest, and furthermore, the outliers are showing that the most damaging earthquakes are also the shallowest. The deeper the earthquake the smaller the magnitude range gets and the clusters get smaller as well. Earthquakes of over 300km in depth have the smallest clusters, but a lot of outliers (probably due to their unpredictability), and they mostly occur at the 4-6 magnitude range. They are still doing a lot of damage and are by no means mellow, but they also are not typically able to do as much damage as a shallow earthquake as shown on the graph.
+
+# Section #3
+
+## Conclusion
+
+In exploring earthquake event data over the course of 12 months, I was able to see the relationship between earthquake magnitude and depth. I used both a scatter plot and a box plot to represent 130K + instances of data. With no prior knowledge of earthquake patterns, I was able to learn that shallower earthquakes have the highest range of magnitude capabilities (0-9) and can also do the most amount of damage. I also saw that the deepest earthquakes have the smallest magnitude capabilities (4-6) and are most likely to do a substantial amount of damage but do not typically generate small or large earthquakes.

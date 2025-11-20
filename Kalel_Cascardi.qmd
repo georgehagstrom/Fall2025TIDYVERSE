@@ -1,0 +1,89 @@
+---
+title: "Data607_Kalel_Cascardi_Tidyverse_Create"
+author: "Kalel Cascardi"
+format: pdf
+editor: visual
+---
+
+# Define my question
+
+The API I chose is the PokéAPI, a free and well-documented REST API that provides structured data about Pokémon. Each Pokémon entry includes things like its types, base stats (attack, defense, speed, etc.), height, weight, abilities, and other details. The data comes in a simple JSON format that works really well with httr2 and the tidyverse.
+
+For this project, I want to explore something simple and visual: How do base stats differ across Pokémon types? In other words, which types tend to have higher attack, defense, speed, and overall strength?
+
+```{r}
+library(httr2)
+library(tidyverse)
+```
+
+```{r}
+# Step 1: Get a list of Pokémon
+pokemon_list <- request("https://pokeapi.co/api/v2/pokemon?limit=200") |>
+  req_perform() |>
+  resp_body_json()
+
+pokemon_df <- tibble(
+  name = map_chr(pokemon_list$results, "name"),
+  url = map_chr(pokemon_list$results, "url")
+)
+```
+
+```{r}
+# Step 2: Pull full data for each Pokémon
+pokemon_details <- pokemon_df |> 
+  mutate(data = map(url, ~ request(.x) |> req_perform() |> resp_body_json()))
+```
+
+```{r}
+# Extract types
+types_df <- pokemon_details |> 
+  mutate(types = map(data, ~ map_chr(.x$types, ~ .x$type$name))) |>
+  unnest(types)
+```
+
+```{r}
+# Extract stats
+stats_df <- pokemon_details |> 
+  mutate(stats = map(data, ~ tibble(
+    stat = map_chr(.x$stats, ~ .x$stat$name),
+    base_stat = map_int(.x$stats, ~ .x$base_stat)
+  ))) |> 
+  unnest(stats)
+```
+
+```{r}
+# Join types and stats
+joined <- stats_df |> 
+  left_join(types_df |> select(name, types), by = "name")
+```
+
+```{r}
+avg_stats <- joined |> 
+  group_by(types, stat) |> 
+  summarise(mean_stat = mean(base_stat), .groups = "drop")
+```
+
+```{r}
+avg_stats |>
+  ggplot(aes(x = types, y = mean_stat, fill = types)) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~ stat, scales = "free_y") +
+  coord_flip() +
+  labs(
+    title = "Average Pokémon Base Stats by Type",
+    x = "Type",
+    y = "Average Base Stat"
+  ) +
+  theme_minimal() +
+  theme(
+    text = element_text(size = 8),
+    strip.text = element_text(size = 9),
+    axis.text.x = element_text(size = 7),
+    axis.text.y = element_text(size = 7),
+    plot.title = element_text(size = 10, face = "bold")
+  )
+```
+
+Conclusion
+
+Looking across the first 200 Pokémon, the different types show pretty distinct base-stat profiles: • Fighting has the highest average attack (≈102), followed by Dragon and Rock. • Rock and Ice stand out for very high defense (Rock ≈110, Ice ≈95). • Ghost and Steel have the highest special-attack (≈107), which fits their typical in-game design. • Ice again ranks very high in special-defense (≈91), making it one of the strongest defensive types overall in this sample. • Fastest types include Electric (≈82), Flying (≈83), Fire (≈84), and Ghost (≈92). • Lower-stat types include Fairy (low attack and speed), Bug (generally mid- to low-range), and Normal (balanced but not high in any single category).

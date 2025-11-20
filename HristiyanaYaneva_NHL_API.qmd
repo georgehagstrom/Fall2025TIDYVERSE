@@ -1,0 +1,91 @@
+
+---
+title: "NHL API Analysis"
+author: "Hristiyana Yaneva" 
+format: pdf
+editor: source
+---
+
+# 1. Introduction
+
+I've picked the NHL API (https://gitlab.com/dword4/nhlapi) which provides real-time and historical data about NHL teams, players, and games. The question I've decided to answer is: Which NHL divisions are most competitive based on point spread currently? This is always an interesting question to explore, and since we are already a month into hockey, we should be getting a more realistic picture of the divisions than if we were to gather data from after the opening week.
+
+
+# 2. Data Collection and Analysis
+
+The code uses `httr2` to send a GET request to the NHL API's standings endpoint. The `req_perform()` function executes the request, and `resp_body_json(simplifyVector = TRUE)` parses the JSON response into a dataframe. The standings data is nested, so I use `unnest()` to extract team names from the nested dataframe structure.
+```{r}
+#| message: false
+library(httr2)
+library(tidyverse)
+```
+
+```{r}
+resp <- request("https://api-web.nhle.com/v1/standings/now") |>
+  req_perform() |>
+  resp_body_json(simplifyVector = TRUE)
+
+#Extracts the standings
+standings <- resp$standings
+
+div_standings <- standings |> 
+  unnest(teamName) |>
+  select(team = default, divisionName, points, wins) |>
+  arrange(desc(points))
+
+div_standings
+```
+```{r}
+standings |>
+  unnest(teamName) |>
+  group_by(divisionName) |>
+  summarize(point_spread = max(points) - min(points)) |>
+  ggplot(aes(x = reorder(divisionName, -point_spread), y = point_spread)) +
+  geom_col(fill = "steelblue") +
+  coord_flip() +
+  labs(title = "NHL Division Competitiveness (Early Season 2025-26)",
+       subtitle = "Lower spread = more competitive",
+       x = "Division", 
+       y = "Point Spread (1st to Last)") +
+  theme_minimal()
+```
+```{r}
+#Top and bottom teams
+standings |>
+  unnest(teamName) |>
+  arrange(desc(points)) |>
+  mutate(rank = row_number(),
+         category = case_when(
+           rank <= 5 ~ "Top 5",
+           rank > n() - 5 ~ "Bottom 5",
+           TRUE ~ "Middle"
+         )) |>
+  filter(category != "Middle") |>
+  ggplot(aes(x = reorder(default, points), y = points, fill = category)) +
+  geom_col() +
+  coord_flip() +
+  labs(title = "Top 5 vs Bottom 5 NHL Teams (2025-26)",
+       x = "Team",
+       y = "Points") +
+  theme_minimal()
+
+
+standings |>
+  unnest(teamName) |>
+  arrange(desc(points)) |>
+  slice(1:10) |>
+  ggplot(aes(x = reorder(default, points), y = points, fill = divisionName)) +
+  geom_col() +
+  coord_flip() +
+  labs(title = "Top 10 NHL Teams by Division (2025-26)",
+       x = "Team",
+       y = "Points",
+       fill = "Division") +
+  theme_minimal()
+```
+
+# 3. Conclusion
+
+The Central Division shows the largest point spread (11 points) between first and last place, which suggests it is the least competitive compared to other divisions. In contrast, the Atlantic Division has the smallest spread (6 points), indicating more competitiveness early in the season.
+
+The top 5 teams are tightly clustered around 18-19 points, while the bottom 5 teams show more variation (6-13 points), meaning that struggling teams are falling behind faster than top teams are pulling ahead. When we examine the top 10 teams by division, we can see that balanced representation - Central (3 teams), Metropolitan (2 teams), Atlantic (2 teams), and Pacific (3 teams) - indicating no single division is dominating too much and too early in the 2025-26 season. Overall, it appears that in the NHL we have elite teams that are emerging quickly while weaker teams are already showing signs of falling out of playoff contention.
