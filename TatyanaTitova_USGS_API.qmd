@@ -20,6 +20,10 @@ library(lubridate)
 library(sf)
 library(maps)
 library(purrr)
+
+# added by Zoran Glisovic
+library(dplyr)
+library(tidyverse)
 ```
 
 # Section #1
@@ -199,7 +203,7 @@ My code works with the API because it sets up the base URL and I built the reque
 
 ## Visualizations
 
-#### Magnitude vs Depth 
+#### Magnitude vs Depth
 
 Creating a scatter plot to see the relationship between earthquake magnitude and depth.
 
@@ -242,3 +246,35 @@ This graph shows a similar pattern with more details. By breaking into bins we c
 ## Conclusion
 
 In exploring earthquake event data over the course of 12 months, I was able to see the relationship between earthquake magnitude and depth. I used both a scatter plot and a box plot to represent 130K + instances of data. With no prior knowledge of earthquake patterns, I was able to learn that shallower earthquakes have the highest range of magnitude capabilities (0-9) and can also do the most amount of damage. I also saw that the deepest earthquakes have the smallest magnitude capabilities (4-6) and are most likely to do a substantial amount of damage but do not typically generate small or large earthquakes.
+
+
+
+## Extension
+
+Extension by Zoran Glisovic: Map of earthquakes by depth
+```{r extension-by-zoran, fig.width = 10, fig.height = 5, dpi = 300}
+library(ggplot2)
+
+ggplot() +
+  borders("world", colour = "gray70", fill = "gray95", size = 0.2) +
+  geom_point(
+    data = eq_df,
+    aes(x = longitude, y = latitude, color = depth),
+    size = 0.3,
+    alpha = 0.05
+  ) +
+  coord_quickmap() +
+  scale_color_viridis_c(option = "plasma") +
+  labs(
+    title = "Global Earthquakes (Last 12 Months)",
+    subtitle = "Colored by depth (km)",
+    x = "Longitude",
+    y = "Latitude",
+    color = "Depth (km)"
+  ) +
+  theme_minimal()
+```
+
+
+In the original example, the USGS earthquake data was already cleaned into a tidy table that included latitude, longitude, and depth. The maps package was also loaded, and I was interested in seeing how this global earthquake activity would look when plotted on a world map, especially since geographic coordinates were already available. To extend the vignette, I created a map that places each earthquake at its location on the globe and colors the points by depth. This gives a clear visual view of where earthquakes happened over the last year and highlights clustering in certain regions, which likely follow major tectonic plate boundaries.
+
