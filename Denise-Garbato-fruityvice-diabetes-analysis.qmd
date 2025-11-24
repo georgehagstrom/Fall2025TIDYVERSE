@@ -1,6 +1,10 @@
 ---
 title: "Tidyverse API Vignette — Fruits"
-author: "Denise Garbato"
+author: 
+    - name: "Denise Garbato"
+      roles: ["Primary Author"]
+    - name: "Hristiyana Yaneva"
+      roles: ["Secondary Author"]
 format: pdf
 editor: visual
 ---
@@ -192,3 +196,30 @@ This analysis used the Fruityvice API to identify fruits with lower sugar and ca
 I also discovered fruits I had never tried before, including pitahaya (dragon fruit), which is surprisingly low in sugar compared to many tropical fruits. Based on this analysis, I plan to explore more of these fruits in local Asian markets.
 
 .
+
+## 6. Add-On Analysis
+
+Additional Analysis by Hristiyana Yaneva
+
+Since fat content can affect satiety and doesn't directly raise blood sugar, I wanted to examine which diabetes-friendly fruits are highest in fat, as this may help with meal planning and feeling fuller longer."
+
+```{r}
+#Fat content analysis of diabetes-friendly fruits
+diabetes_friendly_fruits |>
+  select(name, fat, sugar, carbohydrates) |>
+  arrange(desc(fat)) |>
+  slice_head(n = 10) |>
+  ggplot(aes(x = fat, y = fct_reorder(name, fat))) +
+  geom_col(fill = "darkgreen") +
+  geom_text(aes(label = round(fat, 2), x = fat + 0.5), 
+            size = 4, hjust = 0) +
+  labs(
+    title = "Fat Content in Diabetes-Friendly Fruits",
+    subtitle = "Avocado stands out with healthy monounsaturated fats",
+    x = "Fat (g per 100g)",
+    y = "Fruit"
+  ) +
+  theme_minimal(base_size = 13)
+```
+
+Avocado is by far the highest in fat among diabetes-friendly fruits, but these are primarily heart-healthy monounsaturated fats. Most other low-sugar fruits contain minimal fat.
