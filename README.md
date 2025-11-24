@@ -32,6 +32,7 @@ Add a few lines to this readme with your name, the api you selected, and a descr
 5.  Hristiyana Yaneva, NHL API <https://gitlab.com/dword4/nhlapi>
 
     -   Analyzed NHL division competitiveness using current season standings data and visualized point spreads across divisions.
+    -   Extended Denise Garbato's diabetes-friendly fruit analysis by examining fat content among low-sugar fruits.
 
 6.  Zoran Glisovic, Open-Meteo API [ttps://open-meteo.com/en/docs/historical-weather-api](https://open-meteo.com/en/docs/historical-weather-api){.uri}
 
