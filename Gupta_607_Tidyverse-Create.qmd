@@ -1,0 +1,155 @@
+---
+title: "Indian Artists at the Met Museum"
+author: sarika s gupta
+format: pdf
+editor: visual
+---
+
+## Introduction
+
+When I was 12, my family visited NYC. I was excited about going to the Met because I had read "From the Mixed Up Files of Ms. Basil E. Frankweiler." Unfortunately, it was closed the day we visited so we never went inside. Years later when I moved to NYC, my childhood best friend got me a Met membership. I went once a week, sat in what was the children's library and wrote, taking breaks to walk through the museum. The South Asian art area always drew me in and that's where I spent most of my time wandering.
+
+I learned that the Met has over 470,000 artworks in its collection. I wanted to explore how Indian artists are represented across the entire museum (not just in the Asian Art wing). Which departments feature their work? And from what time period(s)? I used the Met's open API to answer my questions.
+
+## Data Collection and Analysis
+
+I used the `httr2` to access the Met Museum API and tidyverse to wrangle and visualize the data.
+
+```{r}
+library(httr2)
+library(tidyverse)
+library(jsonlite)
+```
+
+## Searching for Indian Artists
+
+First, I'll search Across the Met collection for objects associated with Indian artists or culture.
+
+Search for Indian artists/culture
+
+```{r}
+req_indian <- request("https://collectionapi.metmuseum.org/public/collection/v1/search?artistOrCulture=true&q=indian")
+
+```
+
+Perform the request (send the request and gets the response)
+
+```{r}
+resp_indian <- req_indian |> 
+  req_perform()
+```
+
+Extract and parse JSON data and convert to a df
+
+```{r}
+indian_results <- resp_indian |> 
+  resp_body_json()
+```
+
+Determine number of objects
+
+```{r}
+cat("Objects related to 'Indian':", indian_results$total, "\n")
+```
+
+This search found 1303 objects. The API's\`artistOrCulture=true\` parameter searched across artist names and cultural origins in all departments, not just Asian Art.
+
+Get object IDs
+
+```{r}
+indian_object_ids <- indian_results$objectIDs
+```
+
+Getting Detailed Object Info
+
+Rather than fetching all 1303 works (which takes time), I decided to pull a sample of 100 of these works.
+
+```{r}
+set.seed(100)
+sample_ids <- sample(indian_object_ids, 100)
+```
+
+The data shows object IDs, titles, departments, artist information, and dates.
+
+Function to get object details with error handling
+
+```{r}
+get_object_details <- function(object_id) {
+  Sys.sleep(0.05)
+  tryCatch({
+    url <- paste0("https://collectionapi.metmuseum.org/public/collection/v1/objects/", object_id)
+    req <- request(url)
+    resp <- req |> req_perform()
+    resp |> resp_body_json()
+  }, error = function(e) {
+    NULL  # Return NULL if there's an error
+  })
+}
+```
+
+Get details for all sampled objects
+
+```{r}
+object_details <- map(sample_ids, get_object_details)
+```
+
+Remove any NULLs (failed requests)
+
+```{r}
+objects_df <- map_df(object_details, function(obj) {
+  tibble(
+    objectID = obj$objectID,
+    title = obj$title %||% NA,
+    department = obj$department %||% NA,
+    artistDisplayName = obj$artistDisplayName %||% NA,
+    artistNationality = obj$artistNationality %||% NA,
+    objectDate = obj$objectDate %||% NA,
+    objectBeginDate = obj$objectBeginDate %||% NA,
+    medium = obj$medium %||% NA
+  )
+})
+```
+
+Look at data
+
+```{r}
+head(objects_df)
+```
+
+## Analyzing Department Distribution
+
+Looking to see which departments feature Indian artists/culture. Counting objects by department
+
+```{r}
+dept_counts <- objects_df |> 
+  count(department, sort = TRUE)
+  
+dept_counts
+```
+
+I was really surprised that the Arms and Armor department contained the most objects by Indian artists/culture (over 50), while the Asian Art department had only 1 work in this sample!
+
+## Visualizing Department Distribution
+
+```{r}
+dept_counts |> 
+  filter(!is.na(department)) |> 
+  ggplot(aes(x = reorder(department, n), y = n)) +
+  geom_col(fill = "steelblue") +
+  geom_text(aes(label = n), hjust = -0.3, size = 3.5) +
+  coord_flip() +
+  scale_y_continuous(breaks = seq(0, 70, 10)) +
+  labs(
+    title = "Indian Objects Across Met Museum Departments",
+    x = NULL,
+    y = "Number of Objects"
+  ) +
+  theme_minimal() +
+  theme(axis.text.y = element_text(size = 10))
+```
+
+## Conclusion
+
+The data show something surprising: in my sample of 100 Indian objects from the Met, Arms and Armor had the most (over 50 objects), while Asian Art - where I spent so much time wandering - had only 1 object (!). Musical Instruments also had a significant number of Indian artists, along with the Costume Institute and the European Sculpture and Decorative Arts (which was surprising!)
+
+This API Analysis answered my question: Indian artists and objects ARE represented across many departments at the Met, and they are not just confined to the "South Asian art" section. Indian culture shows up in functional objects, weapons, musical instruments, and textiles in addition to traditional art forms (e.g, paintings, sculpture). Next time I visit the Met, I'll wander beyond the South Asian galleries to see if I can find the work of Indian artists in the other departments

@@ -44,3 +44,6 @@ Add a few lines to this readme with your name, the api you selected, and a descr
 
    - Analyzed nutritional data for fruits using the Fruityvice API to identify diabetes-friendly options (low sugar and carbohydrates per 100g).
 
+9. Sarika Gupta, Met Museum API - https://metmuseum.github.io/
+- Analyzed representation of Indian artists across Met Museum departments (not just South Asian art dept) using the museum's open API.
+
