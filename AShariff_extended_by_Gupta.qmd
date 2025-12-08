@@ -1,0 +1,141 @@
+---
+title: "DATA 607_TidyVerse PT.1_Abeer Shariff"
+format: html
+editor: visual
+---
+
+## Packages
+
+```{r}
+library(tidyverse)
+library(httr2)
+library(jsonlite)
+library(tibblify)
+library(lubridate)
+library(dplyr)
+```
+
+## API: Open Library
+
+-   <https://openlibrary.org/developers/api>
+
+-   **Description:** Open Library API searches for books by: title, author, edition, subject covers, ISBNs, OCLC, LCCNs, and on public reading logs.
+
+    -   Based on github, no authentication is needed for the Open Library API
+
+    -   The website also states that the sear API accepts "q" as a query parameter:
+
+        -   **Ex**: https://openlibrary.org/search/authors.json?q=j%20k%20rowling
+
+## Open Library: Authors API Analysis
+
+-   I am interested in the **Authors API** where it displays search results of books based on authors.
+
+-   For this vizualization, I chose two authors:
+
+    -   Lemony Snicket, author of A Series of Unfortunate Events (13 books)
+
+        -   Author of a very well-known children's book turned series on Netflix.
+
+    -   Moyoco Anno, author of Sugar Sugar Rune (8 volumes).
+
+        -   Author of a no-longer reprinted manga series in Japan.
+
+-   I am interested in seeing if every book written by the author will be pulled out via the Authors API search. There should be at minimum 13 for Snicket and 8 for Anno.
+
+    -   Furthermore, does this search include the different languages published for each volume?
+
+        -   Since Anno manga series was first published in Japanese, will there be duplicates of the 8 volumes that are English editions?
+
+```{r}
+author1 = request("https://openlibrary.org/search/authors.json") |>
+  req_url_query(q = "lemony snicket")
+
+snicket <- req_perform(author1)
+
+data_book <- resp_body_json(snicket)
+
+snicket_list <- data_book$docs
+
+snicket_data <- bind_rows(snicket_list)
+
+count(snicket_data, top_work)
+
+snicket_dataa <- snicket_data |>
+  mutate(top_work = case_when(
+    top_work == "&#119811;&#7883;&#119847;&#7885;&#119852;&#119834;&#119854;&#119851; Activity Book" ~ "Activity Book",
+    top_work == "LES DESASTREUSES AVENTURES DES ORPHELINS BAUDELAIRE T.8 ; PANIQUE A LA CLINIQUE" ~ "Panique A La Clinique",
+    TRUE ~ top_work))
+
+snicket_dataa |>
+  ggplot(aes(top_work)) + 
+  geom_bar() +
+  coord_flip() +
+  labs(
+    title = "Top Works for Lemony Snicket",
+    x = "Work Title",
+    y = "Count"
+  )
+```
+
+-   Top_Work lists only 7 different works when "Lemony Snicket" was searched using the Library - Authors API. Of the 7, the book "The Bad Beginning" which is volume one of "The Series of Unfortunate Events" was listed 10 times. No other volume of that series is listed - besides a sampler of the series).
+
+-   I've also found out, through this analysis, that Lemony Snicket is not the authors real name, its Daniel Handler.
+
+-   If the analysis was rerun with the name "Daniel Handler" will all 13 volumes come up in the search?
+
+```{r}
+author1a = request("https://openlibrary.org/search/authors.json") |>
+  req_url_query(q = "daniel handler")
+
+handler <- req_perform(author1a)
+
+data_booka <- resp_body_json(handler)
+
+handler_list <- data_booka$docs
+
+handler_data <- bind_rows(handler_list)
+
+count(handler_data, top_work)
+
+handler_data |>
+  ggplot(aes(top_work)) + 
+  geom_bar() +
+  labs(
+    title = "Top Works for Daniel Handler",
+    x = "Work Title",
+    y = "Count"
+  )
+```
+
+-   The results are similar to when "Lemony Snicket" was the search. Not all 13 volumes are listed - only "The Bad Beginning" (10 times) and the sampler of "A Series of Unfortunate Events."
+
+```{r}
+author2 = request("https://openlibrary.org/search/authors.json") |>
+  req_url_query(q = "moyoco anno")
+
+anno <- req_perform(author2)
+
+data_manga <- resp_body_json(anno)
+
+anno_list <- data_manga$docs
+
+anno_data <- bind_rows(anno_list)
+
+count(anno_data, top_work)
+
+anno_data |>
+  ggplot(aes(top_work)) + 
+  geom_bar() +
+  labs(
+    title = "Top Works for Moyoco Anno",
+    x = "Work Title",
+    y = "Count"
+  )
+```
+
+-   Similar to Snicker and Handler, the top_work result only displayed 1 volume - Volume 8 of Sugar Sugar Rune (10 times). Furthermore, it was the Japanese version.
+
+## Conclusion:
+
+-   The Authors API search that is apart of "Open Library" does not include all titles of books written but the author, instead it views the top rated ones. Also, the search may be limited, providing only a few titles when the author is searched.
