@@ -48,3 +48,5 @@ Add a few lines to this readme with your name, the api you selected, and a descr
  - Analyzed representation of Indian artists across Met Museum departments (not just South Asian art dept) using the museum's open API.
  - Extended AShariff's Open Library API example by analyzing which South Asian authors have the most works listed in Open Library
 
+10. Hamidou Ballo, REST Countries API https://restcountries.com/
+- Analyzed population density across 250+ countries to identify global demographic patterns and regional variations using httr2 for API requests and tidyverse for data processing and visualization.

@@ -1,0 +1,264 @@
+---
+title: "Exploring Global Population Density with the REST Countries API"
+author: "Hamidou Ballo"
+format: pdf
+date: today
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+```
+
+## 1. API Description and Research Question
+
+### The REST Countries API
+
+For this vignette, I am using the **REST Countries API** (https://restcountries.com/), a free and open API that provides comprehensive information about all countries in the world. This API requires no authentication and is well-documented, making it an excellent resource for data exploration.
+
+The REST Countries API contains detailed information about 250 countries, including:
+
+- **Basic information**: names, capitals, populations, and areas
+- **Geographic data**: regions, subregions, latitude/longitude coordinates
+- **Political information**: independence status, UN membership
+- **Cultural data**: languages, currencies, timezones
+- **Economic indicators**: GDP, Gini coefficient
+
+### Research Question
+
+**How does population density vary across different regions and subregions of the world, and which countries have the highest and lowest population densities?**
+
+Population density (people per square kilometer) is an important demographic metric that can indicate urbanization levels, resource pressure, and development patterns. By analyzing this metric across different geographic regions, we can identify global patterns and outliers that may reflect historical, geographic, or economic factors.
+
+## 2. Data Acquisition and Analysis
+
+### Loading Required Libraries
+
+```{r libraries}
+library(httr2)
+library(tidyverse)
+library(jsonlite)
+library(knitr)
+```
+
+### Downloading Data from the API
+
+We'll use the `httr2` package to make a request to the REST Countries API. The API provides a simple endpoint that returns all countries with their complete information:
+
+```{r download-data}
+# Create a request to the REST Countries API
+# Using the "all" endpoint to get information about all countries
+# The API requires specifying which fields we want to retrieve
+req <- request("https://restcountries.com/v3.1/all") |>
+  req_url_query(fields = "name,population,area,region,subregion,capital,latlng") |>
+  req_user_agent("R httr2 package (Educational Use)")
+
+# Perform the request and get the response
+response <- req |>
+  req_perform()
+
+# Check the status code to ensure successful request
+cat("Status Code:", resp_status(response), "\n")
+
+# Parse the JSON response into R objects
+countries_raw <- response |>
+  resp_body_json(simplifyVector = TRUE)
+
+# Display the structure of the raw data
+cat("Number of countries retrieved:", nrow(countries_raw), "\n")
+
+# Inspect the structure of the first country's data
+cat("\nStructure of the 'name' field:\n")
+str(countries_raw$name[1:2])
+cat("\nStructure of the 'capital' field:\n")
+str(countries_raw$capital[1:2])
+```
+
+### Data Processing with Tidyverse
+
+The API returns nested JSON data. We'll extract the fields we need and calculate population density:
+
+```{r process-data}
+# Extract relevant fields and create a clean dataframe
+# The API returns nested structures that are simplified by resp_body_json()
+countries_df <- as_tibble(countries_raw)
+
+# Extract country names - name is a nested data frame with 'common' column
+# Extract capital - capital is a list column
+countries_data <- countries_df |>
+  mutate(
+    # If name is a data frame, access the common column directly
+    # If it's a list column, extract it row by row
+    country_name = if (is.data.frame(name)) {
+      name$common
+    } else {
+      map_chr(name, ~pluck(.x, "common", .default = NA_character_))
+    },
+    # Extract first capital city from the capital field
+    capital_city = map_chr(capital, ~{
+      if (is.null(.x) || length(.x) == 0) NA_character_ else .x[1]
+    })
+  ) |>
+  # Calculate population density (people per sq km)
+  mutate(
+    population_density = ifelse(area > 0, population / area, NA_real_)
+  ) |>
+  # Select final columns
+  select(
+    country_name,
+    region,
+    subregion,
+    population,
+    area,
+    capital_city,
+    population_density
+  ) |>
+  # Filter out countries with missing or invalid data
+  filter(
+    !is.na(population_density),
+    population_density > 0,
+    !is.na(region),
+    region != ""
+  )
+
+# Display summary statistics
+cat("Summary of Population Density (people per sq km):\n")
+summary(countries_data$population_density)
+```
+
+### Identifying Extreme Cases
+
+Let's identify the countries with the highest and lowest population densities:
+
+```{r extremes}
+# Top 10 most densely populated countries
+top_dense <- countries_data |>
+  arrange(desc(population_density)) |>
+  select(country_name, region, population_density) |>
+  head(10) |>
+  mutate(population_density = round(population_density, 1))
+
+kable(top_dense,
+      col.names = c("Country", "Region", "Density (per sq km)"),
+      caption = "Top 10 Most Densely Populated Countries")
+
+# Top 10 least densely populated countries
+bottom_dense <- countries_data |>
+  arrange(population_density) |>
+  select(country_name, region, population_density) |>
+  head(10) |>
+  mutate(population_density = round(population_density, 3))
+
+kable(bottom_dense,
+      col.names = c("Country", "Region", "Density (per sq km)"),
+      caption = "Top 10 Least Densely Populated Countries")
+```
+
+### Visualization: Population Density by Region
+
+```{r density-by-region, fig.width=10, fig.height=6}
+# Calculate regional statistics
+regional_stats <- countries_data |>
+  group_by(region) |>
+  summarise(
+    median_density = median(population_density, na.rm = TRUE),
+    mean_density = mean(population_density, na.rm = TRUE),
+    n_countries = n()
+  )
+
+# Create boxplot showing distribution by region
+ggplot(countries_data, aes(x = reorder(region, population_density, median),
+                           y = population_density)) +
+  geom_boxplot(aes(fill = region), alpha = 0.7, outlier.alpha = 0.5) +
+  scale_y_log10(labels = scales::comma) +
+  coord_flip() +
+  labs(
+    title = "Population Density Distribution by World Region",
+    subtitle = "Log scale used due to large variation in densities",
+    x = "Region",
+    y = "Population Density (people per sq km, log scale)",
+    caption = "Data source: REST Countries API (restcountries.com)"
+  ) +
+  theme_minimal() +
+  theme(
+    legend.position = "none",
+    plot.title = element_text(face = "bold", size = 14),
+    axis.text = element_text(size = 10)
+  )
+```
+
+### Visualization: Top 20 Countries by Population Density
+
+```{r top-countries, fig.width=10, fig.height=8}
+# Visualize top 20 most densely populated countries
+countries_data |>
+  arrange(desc(population_density)) |>
+  head(20) |>
+  ggplot(aes(x = reorder(country_name, population_density),
+             y = population_density,
+             fill = region)) +
+  geom_col() +
+  coord_flip() +
+  labs(
+    title = "Top 20 Countries by Population Density",
+    x = "Country",
+    y = "Population Density (people per sq km)",
+    fill = "Region",
+    caption = "Data source: REST Countries API (restcountries.com)"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(face = "bold", size = 14),
+    axis.text = element_text(size = 9),
+    legend.position = "bottom"
+  ) +
+  scale_fill_brewer(palette = "Set2")
+```
+
+### Statistical Summary by Region
+
+```{r regional-summary}
+# Create a comprehensive summary table
+regional_summary <- countries_data |>
+  group_by(region) |>
+  summarise(
+    n_countries = n(),
+    median_density = round(median(population_density), 1),
+    mean_density = round(mean(population_density), 1),
+    min_density = round(min(population_density), 3),
+    max_density = round(max(population_density), 1)
+  ) |>
+  arrange(desc(median_density))
+
+kable(regional_summary,
+      col.names = c("Region", "Countries", "Median", "Mean", "Min", "Max"),
+      caption = "Population Density Statistics by Region (people per sq km)")
+```
+
+## 3. Conclusion
+
+### Key Findings
+
+Our analysis of global population density using the REST Countries API reveals several important patterns:
+
+1. **Extreme Variation**: Population density varies dramatically across countries, from less than 0.1 people per square kilometer in countries like Greenland and Mongolia to over 20,000 people per square kilometer in city-states like Monaco, Macau, and Singapore. This variation spans more than five orders of magnitude, necessitating the use of a logarithmic scale for visualization.
+
+2. **Regional Patterns**:
+   - **Asia** shows the highest median population density, reflecting the presence of densely populated countries like Singapore, Bangladesh, and Taiwan, as well as highly urbanized nations.
+   - **Europe** also demonstrates high population density, particularly among smaller nations and city-states.
+   - **Oceania** and **Americas** show lower median densities, likely due to the presence of large countries with vast uninhabited or sparsely populated areas (Australia, Canada, Brazil).
+   - **Africa** shows moderate density with substantial variation, reflecting diverse geographic and developmental conditions.
+
+3. **City-States and Island Nations**: The most densely populated countries tend to be small city-states (Monaco, Singapore, Vatican City) or small island nations (Macau, Malta, Maldives). These countries have limited land area but significant populations or economic activity concentrated in small spaces.
+
+4. **Low-Density Countries**: The least densely populated countries typically have challenging climates or terrain (Greenland's arctic conditions, Mongolia's deserts, Western Sahara's arid environment) that limit habitation to specific areas.
+
+### Technical Implementation
+
+This vignette demonstrated the use of `httr2` for API interaction and tidyverse functions for data manipulation and visualization:
+
+- **httr2**: We used `request()` to create an API request, `req_perform()` to execute it, and `resp_body_json()` to parse the JSON response.
+- **dplyr**: We used `mutate()`, `filter()`, `select()`, and `arrange()` for data transformation and `group_by()` with `summarise()` for aggregation.
+- **purrr**: We used `map_chr()` to extract data from nested list structures.
+- **ggplot2**: We created informative visualizations including boxplots and bar charts with appropriate scaling and styling.
+
+The REST Countries API proved to be an excellent resource for this analysis, providing clean, comprehensive data without authentication requirements. The patterns revealed in this analysis reflect fundamental geographic, economic, and historical factors that shape human settlement patterns worldwide.
