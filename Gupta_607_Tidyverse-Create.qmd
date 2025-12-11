@@ -153,3 +153,146 @@ dept_counts |>
 The data show something surprising: in my sample of 100 Indian objects from the Met, Arms and Armor had the most (over 50 objects), while Asian Art - where I spent so much time wandering - had only 1 object (!). Musical Instruments also had a significant number of Indian artists, along with the Costume Institute and the European Sculpture and Decorative Arts (which was surprising!)
 
 This API Analysis answered my question: Indian artists and objects ARE represented across many departments at the Met, and they are not just confined to the "South Asian art" section. Indian culture shows up in functional objects, weapons, musical instruments, and textiles in addition to traditional art forms (e.g, paintings, sculpture). Next time I visit the Met, I'll wander beyond the South Asian galleries to see if I can find the work of Indian artists in the other departments
+
+---
+
+# EXTENSION BY HAMIDOU BALLO
+
+## Temporal Analysis: When Were These Objects Created?
+
+Building on Gupta's analysis of department distribution, I wanted to explore the temporal dimension: **when were these Indian objects created?** This helps us understand which historical periods are represented in the Met's collection.
+
+### Data Preparation for Temporal Analysis
+
+First, let's examine and clean the date data. The `objectBeginDate` field contains numeric years that we can use for analysis.
+
+```{r}
+# EXTENSION: Examine the date data structure
+# Filter out objects with valid dates (non-NA and reasonable year values)
+temporal_data <- objects_df |>
+  filter(!is.na(objectBeginDate),
+         objectBeginDate > 0,       # Remove zeros and negative values
+         objectBeginDate <= 2024)   # Ensure dates are not in the future
+
+# Display summary of date range
+cat("Date range of objects:\n")
+cat("Earliest:", min(temporal_data$objectBeginDate), "\n")
+cat("Latest:", max(temporal_data$objectBeginDate), "\n")
+cat("Number of objects with valid dates:", nrow(temporal_data), "\n")
+```
+
+### Creating Century Categories
+
+To better understand temporal patterns, I'll categorize objects by century using tidyverse functions.
+
+```{r}
+# EXTENSION: Create century categories for easier visualization
+temporal_data <- temporal_data |>
+  mutate(
+    century = case_when(
+      objectBeginDate >= 1900 ~ "20th-21st Century",
+      objectBeginDate >= 1800 ~ "19th Century",
+      objectBeginDate >= 1700 ~ "18th Century",
+      objectBeginDate >= 1600 ~ "17th Century",
+      objectBeginDate >= 1500 ~ "16th Century",
+      objectBeginDate >= 1400 ~ "15th Century",
+      TRUE ~ "Before 15th Century"
+    ),
+    # Create ordered factor for proper visualization ordering
+    century = factor(century, levels = c(
+      "Before 15th Century", "15th Century", "16th Century",
+      "17th Century", "18th Century", "19th Century", "20th-21st Century"
+    ))
+  )
+
+# Count objects by century
+century_counts <- temporal_data |>
+  count(century, sort = FALSE) |>
+  arrange(century)
+
+century_counts
+```
+
+### Visualizing Temporal Distribution
+
+```{r}
+# EXTENSION: Create visualization of objects by time period
+ggplot(century_counts, aes(x = century, y = n, fill = century)) +
+  geom_col(show.legend = FALSE) +
+  geom_text(aes(label = n), vjust = -0.5, size = 4) +
+  scale_fill_brewer(palette = "YlOrRd", direction = 1) +
+  labs(
+    title = "Temporal Distribution of Indian Objects at the Met",
+    subtitle = "Most objects date from the 18th-19th centuries",
+    x = "Time Period",
+    y = "Number of Objects"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1, size = 10),
+    plot.title = element_text(face = "bold", size = 14)
+  )
+```
+
+### Temporal Distribution by Department
+
+Let's examine which departments have objects from which time periods.
+
+```{r}
+# EXTENSION: Cross-tabulate century and department
+dept_by_century <- temporal_data |>
+  filter(!is.na(department)) |>
+  count(department, century) |>
+  arrange(department, century)
+
+# Show top combinations
+dept_by_century |>
+  head(15)
+```
+
+### Visualization: Timeline by Department
+
+```{r, fig.width=10, fig.height=6}
+# EXTENSION: Create a heatmap-style visualization
+dept_by_century |>
+  ggplot(aes(x = century, y = reorder(department, n, sum), fill = n)) +
+  geom_tile(color = "white", size = 0.5) +
+  geom_text(aes(label = n), color = "white", size = 3, fontface = "bold") +
+  scale_fill_gradient(low = "steelblue", high = "darkred",
+                      name = "Object Count") +
+  labs(
+    title = "Indian Objects by Department and Time Period",
+    subtitle = "Arms and Armor dominated by 18th-19th century pieces",
+    x = "Time Period",
+    y = NULL
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1, size = 9),
+    axis.text.y = element_text(size = 10),
+    plot.title = element_text(face = "bold", size = 14),
+    legend.position = "right"
+  )
+```
+
+## Extended Conclusion
+
+**Temporal Findings:**
+
+My extension reveals important temporal patterns in the Met's Indian collection:
+
+1. **18th-19th Century Dominance**: The majority of Indian objects in this sample date from the 18th and 19th centuries, coinciding with the height of British colonial presence in India and increased Western interest in Indian art and artifacts.
+
+2. **Arms and Armor Timeline**: The Arms and Armor department's large collection (identified by Gupta) primarily consists of pieces from the 18th-19th centuries, reflecting the period when Mughal and Indian weaponry and armor were highly prized by European collectors.
+
+3. **Limited Ancient Objects**: Very few objects in this sample date before the 15th century, which may reflect both preservation challenges and the Met's particular collecting focus.
+
+4. **Modern Representation**: There are relatively few objects from the 20th-21st centuries in this sample, suggesting the Met's Indian collection emphasizes historical rather than contemporary works.
+
+**Combined Insights**: Together with Gupta's department analysis, we now have a richer picture: Indian culture at the Met is represented not only across multiple departments but also heavily weighted toward the 18th-19th century colonial period, particularly in functional objects like arms, armor, and musical instruments rather than traditional fine art.
+
+---
+
+**Extension completed by:** Hamidou Ballo
+**Original analysis by:** Sarika S Gupta
+**Date extended:** December 2024
