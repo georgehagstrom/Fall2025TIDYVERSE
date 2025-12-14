@@ -130,8 +130,10 @@ abilities_df <- pokemon_details |>
 
 # Join types and stats
 joined <- stats_df |> 
-  left_join(types_df |> select(name, types), by = "name", relationship = "many-to-many") |>
-  left_join(abilities_df |> select(name, abilities), by = "name", relationship = "many-to-many")
+  left_join(types_df |> select(name, types), 
+  by = "name", relationship = "many-to-many") |>
+  left_join(abilities_df |> select(name, abilities), 
+  by = "name", relationship = "many-to-many")
 
 # Average stats by type
 avg_stats <- joined |> 
@@ -161,8 +163,9 @@ stats_by_ability <- joined |>
       stat == "special-defense" ~ "special-defense",
       stat == "speed" ~ "speed"
     ),
-    stat_label = factor(stat_label, levels = c("attack", "defense", "hp", 
-      "special-attack", "special-defense", "speed"))
+    stat_label = factor(stat_label, levels = 
+      c("attack", "defense", "hp", 
+        "special-attack", "special-defense", "speed"))
   )
 
 plot1 <- ggplot(stats_by_ability, aes(x = mean_stat, y = reorder(abilities, mean_stat), fill = abilities)) +
@@ -177,7 +180,8 @@ plot1 <- ggplot(stats_by_ability, aes(x = mean_stat, y = reorder(abilities, mean
   theme(
     legend.position = "none",
     strip.text = element_text(face = "plain", size = 12),
-    plot.title = element_text(face = "bold", size = 16, hjust = 0.5, margin = margin(b = 20)),
+    plot.title = element_text(face = "bold", size = 16, hjust = 0.5, 
+    margin = margin(b = 20)),
     axis.text.y = element_text(size = 8),
     axis.text.x = element_text(size = 9),
     panel.spacing = unit(1.5, "lines"),
@@ -190,7 +194,7 @@ plot1 <- ggplot(stats_by_ability, aes(x = mean_stat, y = reorder(abilities, mean
     "Damp" = "#E91E63",            
     "Flash Fire" = "#9C27B0",      
     "Inner Focus" = "#673AB7",     
-    "Keen Eye" = "#3F51B5",         
+    "Keen Eye" = "#3F51B5",        
     "Overgrow" = "#4CAF50",        
     "Rock Head" = "#FF9800",       
     "Run Away" = "#00BCD4",        
@@ -213,11 +217,13 @@ top_ability_per_type <- joined |>
   group_by(types) |> 
   slice_max(n, n = 1, with_ties = FALSE) |> 
   ungroup() |>
-  mutate(abilities = str_replace_all(abilities, "-", " "))  # Remove hyphens for readability
+  mutate(abilities = str_replace_all(abilities, "-", " "))  
 
-plot2 <- ggplot(top_ability_per_type, aes(x = reorder(types, n), y = n, fill = types)) +
+plot2 <- ggplot(top_ability_per_type, aes(x = reorder(types, n), 
+  y = n, fill = types)) +
   geom_col(show.legend = FALSE) +
-  geom_text(aes(label = abilities), hjust = -0.1, size = 3.5, fontface = "bold") +
+  geom_text(aes(label = abilities), hjust = -0.1, size = 3.5, 
+  fontface = "bold") +
   coord_flip() +
   labs(
     title = "Most Common Ability for Each Pokémon Type",
@@ -236,9 +242,7 @@ plot2 <- ggplot(top_ability_per_type, aes(x = reorder(types, n), y = n, fill = t
     plot.margin = margin(15, 15, 15, 15)
   ) +
   scale_fill_viridis_d(option = "plasma") +
-  scale_y_continuous(expand = expansion(mult = c(0.05, 0.25)))  # Extra space for labels
-
-plot2
+  scale_y_continuous(expand = expansion(mult = c(0.05, 0.25)))  
 
 Plot 1: Average Pokémon Base Stats by Ability
 
