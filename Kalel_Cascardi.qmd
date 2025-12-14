@@ -87,3 +87,163 @@ avg_stats |>
 Conclusion
 
 Looking across the first 200 Pokémon, the different types show pretty distinct base-stat profiles: • Fighting has the highest average attack (≈102), followed by Dragon and Rock. • Rock and Ice stand out for very high defense (Rock ≈110, Ice ≈95). • Ghost and Steel have the highest special-attack (≈107), which fits their typical in-game design. • Ice again ranks very high in special-defense (≈91), making it one of the strongest defensive types overall in this sample. • Fastest types include Electric (≈82), Flying (≈83), Fire (≈84), and Ghost (≈92). • Lower-stat types include Fairy (low attack and speed), Bug (generally mid- to low-range), and Normal (balanced but not high in any single category).
+
+Tidyverse Extended by Rebecca Bronstein
+
+Pokémon abilities are traits that either actively or passively grant a Pokémon an advantage in battle. After examining the previous Tidyverse Pokémon types and their statistical patterns, I wanted to know whether there is a relationship between a Pokémon's type and its ability, as well as whether certain abilities are associated with specific statistical profiles.
+
+{r}
+library(tidyverse)
+library(httr2)
+
+# Step 1: Get a list of Pokémon
+pokemon_list <- request("https://pokeapi.co/api/v2/pokemon?limit=200") |>
+  req_perform() |>
+  resp_body_json()
+
+pokemon_df <- tibble(
+  name = map_chr(pokemon_list$results, "name"),
+  url = map_chr(pokemon_list$results, "url")
+)
+
+# Step 2: Pull full data for each Pokémon
+pokemon_details <- pokemon_df |> 
+  mutate(data = map(url, ~ request(.x) |> req_perform() |> resp_body_json()))
+
+# Extract types
+types_df <- pokemon_details |> 
+  mutate(types = map(data, ~ map_chr(.x$types, ~ .x$type$name))) |>
+  unnest(types)
+
+# Extract stats
+stats_df <- pokemon_details |> 
+  mutate(stats = map(data, ~ tibble(
+    stat = map_chr(.x$stats, ~ .x$stat$name),
+    base_stat = map_int(.x$stats, ~ .x$base_stat)
+  ))) |> 
+  unnest(stats)
+
+# Extract abilities (NEW)
+abilities_df <- pokemon_details |> 
+  mutate(abilities = map(data, ~ map_chr(.x$abilities, ~ .x$ability$name))) |>
+  unnest(abilities)
+
+# Join types and stats
+joined <- stats_df |> 
+  left_join(types_df |> select(name, types), by = "name", relationship = "many-to-many") |>
+  left_join(abilities_df |> select(name, abilities), by = "name", relationship = "many-to-many")
+
+# Average stats by type
+avg_stats <- joined |> 
+  group_by(types, stat) |> 
+  summarise(mean_stat = mean(base_stat), .groups = "drop")
+
+# PLOT 1: Stats vs Abilities 
+
+# Calculate average stats for top abilities
+top_abilities <- abilities_df |> 
+  count(abilities, sort = TRUE) |> 
+  slice_head(n = 10) |> 
+  pull(abilities)
+
+stats_by_ability <- joined |> 
+  filter(abilities %in% top_abilities) |>
+  group_by(abilities, stat) |> 
+  summarise(mean_stat = mean(base_stat), .groups = "drop") |>
+  mutate(
+    abilities = str_replace_all(abilities, "-", " "),
+    abilities = str_to_title(abilities),
+    stat_label = case_when(
+      stat == "hp" ~ "hp",
+      stat == "attack" ~ "attack",
+      stat == "defense" ~ "defense",
+      stat == "special-attack" ~ "special-attack",
+      stat == "special-defense" ~ "special-defense",
+      stat == "speed" ~ "speed"
+    ),
+    stat_label = factor(stat_label, levels = c("attack", "defense", "hp", 
+                                                "special-attack", "special-defense", "speed"))
+  )
+
+plot1 <- ggplot(stats_by_ability, aes(x = mean_stat, y = reorder(abilities, mean_stat), fill = abilities)) +
+  geom_col() +
+  facet_wrap(~ stat_label, ncol = 3, scales = "free_x") +
+  labs(
+    title = "Average Pokémon Base Stats by Ability",
+    x = NULL,
+    y = NULL
+  ) +
+  theme_minimal() +
+  theme(
+    legend.position = "none",
+    strip.text = element_text(face = "plain", size = 12),
+    plot.title = element_text(face = "bold", size = 16, hjust = 0.5, margin = margin(b = 20)),
+    axis.text.y = element_text(size = 8),
+    axis.text.x = element_text(size = 9),
+    panel.spacing = unit(1.5, "lines"),
+    panel.grid.major.y = element_blank(),
+    panel.grid.minor = element_blank(),
+    plot.margin = margin(15, 15, 15, 15)
+  ) +
+  scale_fill_manual(values = c(
+    "Chlorophyll" = "#E74C3C",     # Red
+    "Damp" = "#E91E63",            # Pink
+    "Flash Fire" = "#9C27B0",      # Purple
+    "Inner Focus" = "#673AB7",     # Deep Purple
+    "Keen Eye" = "#3F51B5",        # Indigo
+    "Overgrow" = "#4CAF50",        # Green
+    "Rock Head" = "#FF9800",       # Orange
+    "Run Away" = "#00BCD4",        # Cyan
+    "Static" = "#FFC107",          # Amber
+    "Swift Swim" = "#009688",      # Teal
+    "Torrent" = "#2196F3",         # Blue
+    "Water Absorb" = "#03A9F4"     # Light Blue
+  )) +
+  scale_x_continuous(expand = expansion(mult = c(0, 0.05)))
+
+plot1
+
+# PLOT 2: Types vs Abilities 
+
+# Get the single most common ability for each type
+top_ability_per_type <- joined |> 
+  select(name, types, abilities) |> 
+  distinct() |> 
+  count(types, abilities) |> 
+  group_by(types) |> 
+  slice_max(n, n = 1, with_ties = FALSE) |> 
+  ungroup() |>
+  mutate(abilities = str_replace_all(abilities, "-", " "))  # Remove hyphens for readability
+
+plot2 <- ggplot(top_ability_per_type, aes(x = reorder(types, n), y = n, fill = types)) +
+  geom_col(show.legend = FALSE) +
+  geom_text(aes(label = abilities), hjust = -0.1, size = 3.5, fontface = "bold") +
+  coord_flip() +
+  labs(
+    title = "Most Common Ability for Each Pokémon Type",
+    subtitle = "Showing the #1 most frequent ability per type",
+    x = "Pokémon Type",
+    y = "Number of Pokémon with this Ability",
+    caption = "Data from PokéAPI (first 200 Pokémon)"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(face = "bold", size = 14, hjust = 0.5),
+    plot.subtitle = element_text(size = 11, hjust = 0.5, color = "gray40"),
+    axis.text = element_text(size = 10),
+    axis.title = element_text(size = 11, face = "bold"),
+    panel.grid.major.y = element_blank(),
+    plot.margin = margin(15, 15, 15, 15)
+  ) +
+  scale_fill_viridis_d(option = "plasma") +
+  scale_y_continuous(expand = expansion(mult = c(0.05, 0.25)))  # Extra space for labels
+
+plot2
+
+Plot 1: Average Pokémon Base Stats by Ability
+
+The stat analysis reveals distinct performance profiles across the top 10 abilities, demonstrating intentional design trade-offs. Rock Head excels in physical attack (~85) but shows weaker special stats, while Static displays the opposite pattern with strong special-attack (~80) but lower physical power. Inner Focus stands out with exceptional speed (90+) and special-defense, suggesting a fast, evasive playstyle. Meanwhile, Flash Fire maintains remarkably balanced stats across all categories with no major weaknesses, and Water Absorb demonstrates strong HP and defense suited for a tank role. These patterns indicate that abilities are strategically designed to create specialized battle roles - no single ability dominates all stats, forcing players to make meaningful choices based on their desired playstyle.
+
+Plot 2: Most Common Ability for Each Pokémon Type
+
+The type-ability associations reveal strong thematic consistency in Pokémon design, with abilities reinforcing each type's natural characteristics. Grass-types overwhelmingly feature Chlorophyll (20 Pokémon), water-types favor Swift Swim (15 Pokémon), and fire-types commonly have Flash Fire (10 Pokémon) - all abilities that thematically align with their elemental properties. Common types like grass, water, normal, fire, and electric show concentrated ability distributions with 10+ Pokémon sharing signature abilities, while rarer types (dragon, dark, ice, steel) display more diverse and specialized abilities appearing in only 1-5 Pokémon. This distribution suggests the first 200 Pokémon heavily favored certain types, creating clear ability archetypes, and demonstrates how Game Freak used abilities to reinforce type identity - water Pokémon swim swiftly, electric Pokémon paralyze on contact, and grass Pokémon thrive in sunlight.
