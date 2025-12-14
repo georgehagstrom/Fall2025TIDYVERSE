@@ -39,11 +39,13 @@ Add a few lines to this readme with your name, the api you selected, and a descr
 
     -   Explored relationship between magnitude and depth for earthquake data over the past 12 months.
     -   Extended by Zoran Glisovic by adding a world map visualization of earthquake locations using latitude, longitude, and depth from the original USGS API data.
+    -   Extended by Denise Garbato by examining the relationship between earthquake magnitude and USGS significance scores, including visualization and correlation analysis.
+
     
 8. Denise Garbato — Fruityvice API <https://www.fruityvice.com/>
 
    - Analyzed nutritional data for fruits using the Fruityvice API to identify diabetes-friendly options (low sugar and carbohydrates per 100g).
-
+ 
 9. Sarika Gupta, Met Museum API - https://metmuseum.github.io/
  - Analyzed representation of Indian artists across Met Museum departments (not just South Asian art dept) using the museum's open API.
  - Extended AShariff's Open Library API example by analyzing which South Asian authors have the most works listed in Open Library

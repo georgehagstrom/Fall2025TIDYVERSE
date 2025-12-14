@@ -15,7 +15,7 @@ This project entails selecting a website API to load data in R and visualize it.
 library(tidyr)
 library(httr2)
 library(jsonlite)
-library(tibblify)
+library(tibblify) 
 library(lubridate)
 library(sf)
 library(maps)
@@ -247,11 +247,10 @@ This graph shows a similar pattern with more details. By breaking into bins we c
 
 In exploring earthquake event data over the course of 12 months, I was able to see the relationship between earthquake magnitude and depth. I used both a scatter plot and a box plot to represent 130K + instances of data. With no prior knowledge of earthquake patterns, I was able to learn that shallower earthquakes have the highest range of magnitude capabilities (0-9) and can also do the most amount of damage. I also saw that the deepest earthquakes have the smallest magnitude capabilities (4-6) and are most likely to do a substantial amount of damage but do not typically generate small or large earthquakes.
 
-
-
 ## Extension
 
 Extension by Zoran Glisovic: Map of earthquakes by depth
+
 ```{r extension-by-zoran, fig.width = 10, fig.height = 5, dpi = 300}
 library(ggplot2)
 
@@ -275,6 +274,93 @@ ggplot() +
   theme_minimal()
 ```
 
-
 In the original example, the USGS earthquake data was already cleaned into a tidy table that included latitude, longitude, and depth. The maps package was also loaded, and I was interested in seeing how this global earthquake activity would look when plotted on a world map, especially since geographic coordinates were already available. To extend the vignette, I created a map that places each earthquake at its location on the globe and colors the points by depth. This gives a clear visual view of where earthquakes happened over the last year and highlights clustering in certain regions, which likely follow major tectonic plate boundaries.
+
+## Extension by Denise Garbato: Magnitude vs Significance
+
+**Objective: Explore how  physical earthquake size relates to the human impact.**
+
+**Approach: explore relationship between magnitude and significance score**
+
+
+```{r}
+# Remove missing values just in case
+
+eq_sig <- eq_df |>
+filter(!is.na(sig), !is.na(mag))
+
+```
+
+
+
+**Scatter plot: Magnitude vs Significance**
+```{r}
+ggplot(eq_sig, aes(x = mag, y = sig)) +
+geom_point(alpha = 0.4, color = "steelblue") +
+geom_smooth(method = "lm", se = TRUE, color = "darkred") +
+labs(
+title = "Earthquake Magnitude vs Significance",
+subtitle = "Higher magnitude earthquakes tend to have higher significance scores",
+x = "Magnitude",
+y = "USGS Significance Score"
+) +
+theme_light()
+
+
+```
+**Comments**
+
+This scatter plot shows a strong positive relationship between earthquake magnitude
+and the USGS significance score. As magnitude increases, earthquakes tend to have
+substantially higher significance, indicating greater real-world impact.
+
+However, for higher-magnitude earthquakes (approximately magnitude 6 and above),
+there is noticeable variability in significance scores. Earthquakes of similar
+magnitude can have very different significance values, suggesting that factors such
+as population density, depth, and geographic location also play an important role
+in determining an earthquake’s overall importance.
+
+**Correlation between earthquake magnitude and significance**
+```{r}
+# Correlation between earthquake magnitude and significance
+
+correlation <- cor(
+eq_sig$mag,
+eq_sig$sig,
+use = "complete.obs",
+method = "pearson"
+)
+
+correlation
+
+```
+**Comments**
+
+The Pearson correlation between earthquake magnitude and the USGS significance score
+is 0.92, indicating a very strong positive linear relationship. This confirms the
+visual pattern observed in the scatter plot, where higher-magnitude earthquakes
+consistently correspond to higher significance values.
+
+Despite this strong association, the relationship is not perfect. Earthquakes of
+similar magnitude—especially at higher magnitudes—can have substantially different
+significance scores. This suggests that while magnitude is a dominant driver of
+significance, other factors such as population density, depth, and geographic
+location also influence an earthquake’s overall impact.
+
+**Conclusion**
+
+This analysis shows a very strong positive association between earthquake magnitude
+and the USGS significance score, with a Pearson correlation of 0.92. Higher-magnitude
+earthquakes tend to have substantially higher significance, indicating that the
+physical size of an earthquake is closely related to its real-world impact.
+
+However, this relationship should not be interpreted as causal. The USGS significance
+score incorporates multiple factors beyond magnitude, including population exposure,
+felt reports, damage estimates, and media attention. As a result, earthquakes of
+similar magnitude can have very different significance scores depending on their
+depth, location, and surrounding infrastructure.
+
+These findings highlight the distinction between physical earthquake size and
+human-centered measures of impact. While magnitude is a dominant contributor to
+significance, it does not fully determine an earthquake’s societal importance.
 
