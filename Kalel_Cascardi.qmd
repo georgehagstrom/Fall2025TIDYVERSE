@@ -162,7 +162,7 @@ stats_by_ability <- joined |>
       stat == "speed" ~ "speed"
     ),
     stat_label = factor(stat_label, levels = c("attack", "defense", "hp", 
-                                                "special-attack", "special-defense", "speed"))
+      "special-attack", "special-defense", "speed"))
   )
 
 plot1 <- ggplot(stats_by_ability, aes(x = mean_stat, y = reorder(abilities, mean_stat), fill = abilities)) +
@@ -186,18 +186,18 @@ plot1 <- ggplot(stats_by_ability, aes(x = mean_stat, y = reorder(abilities, mean
     plot.margin = margin(15, 15, 15, 15)
   ) +
   scale_fill_manual(values = c(
-    "Chlorophyll" = "#E74C3C",     # Red
-    "Damp" = "#E91E63",            # Pink
-    "Flash Fire" = "#9C27B0",      # Purple
-    "Inner Focus" = "#673AB7",     # Deep Purple
-    "Keen Eye" = "#3F51B5",        # Indigo
-    "Overgrow" = "#4CAF50",        # Green
-    "Rock Head" = "#FF9800",       # Orange
-    "Run Away" = "#00BCD4",        # Cyan
-    "Static" = "#FFC107",          # Amber
-    "Swift Swim" = "#009688",      # Teal
-    "Torrent" = "#2196F3",         # Blue
-    "Water Absorb" = "#03A9F4"     # Light Blue
+    "Chlorophyll" = "#E74C3C",     
+    "Damp" = "#E91E63",            
+    "Flash Fire" = "#9C27B0",      
+    "Inner Focus" = "#673AB7",     
+    "Keen Eye" = "#3F51B5",         
+    "Overgrow" = "#4CAF50",        
+    "Rock Head" = "#FF9800",       
+    "Run Away" = "#00BCD4",        
+    "Static" = "#FFC107",          
+    "Swift Swim" = "#009688",      
+    "Torrent" = "#2196F3",         
+    "Water Absorb" = "#03A9F4"     
   )) +
   scale_x_continuous(expand = expansion(mult = c(0, 0.05)))
 
