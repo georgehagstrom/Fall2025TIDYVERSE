@@ -35,6 +35,14 @@ req <- request("https://www.fruityvice.com/api/fruit/all")
 # Perform request
 res <- req_perform(req)
 
+# Check that the API request was successful before continuing
+# This helps catch issues like server errors, broken endpoints, or rate limits
+res |>
+  resp_check_status()
+
+# If the request fails, the analysis stops here with a clear error message
+# instead of silently returning incomplete or incorrect data
+
 # Parse JSON response
 data <- res |> resp_body_json()
 
