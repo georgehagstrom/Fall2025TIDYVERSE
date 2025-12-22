@@ -54,3 +54,6 @@ Add a few lines to this readme with your name, the api you selected, and a descr
 10. Hamidou Ballo, REST Countries API https://restcountries.com/
     - Analyzed population density across 250+ countries to identify global demographic patterns and regional variations using httr2 for API requests and tidyverse for data processing and visualization.
     - Extended Sarika Gupta's Met Museum API analysis by adding temporal analysis to explore when Indian objects were created, revealing that most date from the 18th-19th century colonial period.
+
+11. Haneefah Sebro, Cat Fact API https://catfact.ninja/
+    - Analyzed which words appear most frequently in the entire set of 327 distinct cat facts; identified overarching themes in cat-related knowledge.
