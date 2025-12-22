@@ -1,0 +1,41 @@
+---
+title: "TidyVerse"
+author: "Samantha.M"
+date: "`r Sys.Date()`"
+output: openintro::lab_report
+---
+
+```{r load-packages, message=FALSE}
+library(tidyverse)
+library(openintro)
+library(httr2)
+```
+
+### Exercise 1
+
+Research Question:How have Rotten Tomatoes scores for Studio Ghibli films changed over time?
+
+Conculsion: The visualization shows that Studio Ghibli films have consistently received high Rotten Tomatoes scores over time. While there is some variation between individual films, the overall trend suggests that the studio has maintained strong critical reception across multiple decades.
+```{r}
+req <- request("https://ghibliapi.vercel.app/films")
+resp <- req_perform(req)
+films_raw <- resp_body_json(resp, simplifyVector = TRUE)
+films <- as_tibble(films_raw) |>
+select(title, release_date, rt_score) |>
+mutate(
+release_date = as.numeric(release_date),
+rt_score = as.numeric(rt_score)
+)
+ggplot(films, aes(x = release_date, y = rt_score)) +
+geom_point(color = "steelblue", size = 3) +
+geom_smooth(method = "lm", se = FALSE, color = "darkred") +
+labs(
+title = "Rotten Tomatoes Scores of Studio Ghibli Films Over Time",
+x = "Release Year",
+y = "Rotten Tomatoes Score"
+) +
+theme_minimal()
+
+```
+...
+
