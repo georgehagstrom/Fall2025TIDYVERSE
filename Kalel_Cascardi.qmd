@@ -251,3 +251,29 @@ The stat analysis reveals distinct performance profiles across the top 10 abilit
 Plot 2: Most Common Ability for Each Pokémon Type
 
 The type-ability associations reveal strong thematic consistency in Pokémon design, with abilities reinforcing each type's natural characteristics. Grass-types overwhelmingly feature Chlorophyll (20 Pokémon), water-types favor Swift Swim (15 Pokémon), and fire-types commonly have Flash Fire (10 Pokémon) - all abilities that thematically align with their elemental properties. Common types like grass, water, normal, fire, and electric show concentrated ability distributions with 10+ Pokémon sharing signature abilities, while rarer types (dragon, dark, ice, steel) display more diverse and specialized abilities appearing in only 1-5 Pokémon. This distribution suggests the first 200 Pokémon heavily favored certain types, creating clear ability archetypes, and demonstrates how Game Freak used abilities to reinforce type identity - water Pokémon swim swiftly, electric Pokémon paralyze on contact, and grass Pokémon thrive in sunlight.
+
+
+
+#Addition- Samantha Mesa 
+#Question: Do some Pokémon types rely heavily on a single stat, while others are more balanced across stats?
+
+req <- request("https://ghibliapi.vercel.app/films")
+resp <- req_perform(req)
+films_raw <- resp_body_json(resp, simplifyVector = TRUE)
+films <- as_tibble(films_raw) |>
+select(title, release_date, rt_score) |>
+mutate(
+release_date = as.numeric(release_date),
+rt_score = as.numeric(rt_score)
+)
+ggplot(films, aes(x = release_date, y = rt_score)) +
+geom_point(color = "steelblue", size = 3) +
+geom_smooth(method = "lm", se = FALSE, color = "darkred") +
+labs(
+title = "Rotten Tomatoes Scores of Studio Ghibli Films Over Time",
+x = "Release Year",
+y = "Rotten Tomatoes Score"
+) +
+theme_minimal()
+
+#Response: Types with higher standard deviation show greater specialization, meaning they excel in certain stats while lagging in others. Types like Dragon and Ghost appear highly specialized, whereas Normal and Fairy exhibit more balanced stat profiles. This suggests different design philosophies across type categories.
