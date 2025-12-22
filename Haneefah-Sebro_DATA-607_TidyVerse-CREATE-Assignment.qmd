@@ -1,0 +1,158 @@
+---
+title: "DATA-607_TidyVerse-CREATE-Assignment"
+author: "Haneefah Sebro"
+format: pdf
+editor: visual
+---
+
+## Section I: Description of the API
+
+The API I chose to work with for this assignment is the Cat FACT API (<https://catfact.ninja/>) which is simply an API that contains interesting facts about cats in a JSON format (this API spoke to me because I just became a cat-owner 2 months ago).
+
+The question that I am interested in exploring using the API is: "Which words appear most frequently in a random sample of 500 distinct cat facts? Can we use these words to find overarching themes in cat-related knowledge?"
+
+## Section II: Code that Uses httr2 and other TidyVerse Functions
+
+```{r}
+library(httr2)
+library(tidyverse)
+```
+
+```{r}
+get_all_cat_facts <- function(per_page = 100){
+  cat_url <- "https://catfact.ninja/facts"
+  
+  initial_resp <- request(cat_url) |>
+    req_url_query(limit = per_page, page = 1) |>
+    req_perform() |>
+    resp_body_json()
+  
+  total_number_of_pages <- initial_resp$last_page
+  
+  all_cat_facts <- vector("list", total_number_of_pages)
+  
+  for (page in seq_len(total_number_of_pages)){
+    final_resp <- request(cat_url) |>
+      req_url_query(limit = per_page, page = page) |>
+      req_perform() |>
+      resp_body_json()
+    
+    all_cat_facts[[page]] <-
+      tibble(
+        cat_fact = map_chr(final_resp$data, "fact")
+      )
+  }
+  
+  bind_rows(all_cat_facts) |> distinct(cat_fact)
+}
+```
+
+```{r}
+all_cat_facts <- get_all_cat_facts()
+nrow(all_cat_facts)
+```
+
+```{r}
+glimpse(all_cat_facts)
+```
+
+```{r}
+ignore_list <-
+  c("the", "and", "a", "an", "to", "of", "in", "is", "are", 
+    "that","for", "with", "as", "on", "by", "at", "from", "this",
+    "be", "or", "which", "it", "their", "they", "has", "have",
+    "do","not","be", "its", "can", "about", "when", "was", "than",
+    "only", "more", "all", "some", "how", "will", "because", "most",
+    "few", "many", "while", "were", "other", "per", "her", "him", 
+    "his", "them", "what", "who", "one", "you", "your", "any", "if", "so",
+    "he", "she", "through", "ago", "had", "there", "too", "two", 
+    "also", "both", "get", "but", "much", "often", "their", "theyre",
+    "up", "first", "over", "between", "times", "back"
+    )
+    
+kitty_keywords <- 
+  str_replace_all(
+    str_replace_all(
+      
+      str_to_lower(all_cat_facts$cat_fact)
+      
+    , "[^a-z\\s]", "")
+  , "\\'s", "") |>
+  str_split("\\s+") |>
+  unlist() |>
+  tibble(kitty_keywords = _)
+
+kitty_keywords <-
+  kitty_keywords |>
+  filter(!kitty_keywords %in% ignore_list,
+         nchar(kitty_keywords) > 1) |>
+  mutate(kitty_keywords = 
+           recode(kitty_keywords,
+                  "cat" = "cats",
+                  "dog" = "dogs",
+                  "kitten" = "kittens",
+                  "people" = "humans",
+                  "human" = "humans",
+                  "called" = "call"
+             ))
+
+kitty_keyword_count_table <- 
+  kitty_keywords |>
+  count(kitty_keywords) |>
+  arrange(desc(n))
+
+kitty_keyword_count_table |>
+  head(10)
+
+```
+
+```{r}
+kitty_keyword_count_table |>
+  head(10) |>
+  ggplot(
+    aes(
+      x = reorder(kitty_keywords, n),
+      y = n
+    )) +
+  geom_col(fill = "blue") +
+  coord_flip() +
+  labs(
+    title = "Most Common Words in 327 Distinct Cat Facts",
+    x = "Frequent Words",
+    y = "Number of Times Mentioned"
+  )
+
+```
+
+```{r}
+kitty_keyword_count_table |>
+  filter(kitty_keywords != "cats",
+         kitty_keywords != "kittens") |>
+  head(10) |>
+  ggplot(
+    aes(
+      x = reorder(kitty_keywords, n),
+      y = n
+    )) +
+  geom_col(fill = "blue") +
+  coord_flip() +
+  labs(
+    title = "Most Common Words Besides 'Cat' in 327 Distinct Cat Facts",
+    x = "Frequent Words",
+    y = "Number of Times Mentioned"
+  )
+```
+
+The above code connects to the Cat Fact API to retrieve all cat facts within the API. This was done instead of simply collecting 500 random cat facts because when I crafted my question(s) at the onset of the assignment, I assumed that the database contained way more than 500 cat facts and thus, I wanted to limit the API call to a random selection of 500. However, in writing the code I encountered several errors related to the number of "cat facts" for which I was attempting to pull. This lead me to pull all the cat facts and count the rows, at which point I found out that there were only 332 cat facts, 327 being distinct. Therefore, I modified the code to answer the question regarding the 327 distinct cat facts instead.
+
+The beginning of the code uses the API's /facts endpoint in order to retrieve all 327 cat facts. Since multiple facts are given per request, I used pagination in the first step to inspect page 1 for information as to how many pages there were in total; the second step was to loop through all pages, pulling the cat facts from each one, and combining said facts into a single dataset using the ***bind_rows(all_cat_facts)*** statement. Once I created the dataset in R, I was able to remove the duplicates using the ***distinct(cat_fact)*** transformation.
+
+The next section of the code deals with extracting "keywords" to be able to plot them. I began by making everything lowercase, removing punctuation marks and :apostrophe-s" combinations, and splitting each cat fact into individual words. After getting the individual word list, I remove function words by coming up with a ***ignore_list*** vector so that I could remove all filler/function words at once (I began with a much smaller group of ***ignore_list*** words and began to add to the list as I further inspected the data). I also grouped similar words together since I noticed that the list contained several variations of essentially the same word (i.e. "human" vs. "humans" vs. "people"), this way the counts would be more meaningful.
+
+The last step was to calculate the counts for each word, then plot them using ggplot. I did 2 plots, one that considers the words "cats" and "kittens," and a second one that plots the most common words other than "cats" or "kittens."
+
+## Section III: Conclusion
+
+Looking at the results of the analysis, it’s clear that some words dominate the cat facts dataset, highlighting key themes about cats. Unsurprisingly, “cats” is by far the most frequent word, appearing 443 times, followed by “humans” (59) and “kittens” (28). Other common words such as “dogs” (26), “million” (22), “years” (22), “body” (14), and “female” (13) suggest that the facts often discuss cat biology, lifespan, and interactions with other animals and humans. Words like “call,” “domestic,” “average,” and “like” further indicate the types of behaviors or traits commonly described in the facts.
+
+Grouping similar words and removing filler words made it easier to see these patterns. Overall, the analysis shows that the dataset emphasizes cat anatomy, lifespan, and general behavior, with some facts referencing relationships to humans or other animals. Even though the dataset is relatively small (327 distinct facts), this word frequency analysis provides a useful overview of recurring themes and demonstrates how simple text processing in R can uncover patterns in unstructured textual data.
