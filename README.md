@@ -57,3 +57,4 @@ Add a few lines to this readme with your name, the api you selected, and a descr
 
 11. Haneefah Sebro, Cat Fact API https://catfact.ninja/
     - Analyzed which words appear most frequently in the entire set of 327 distinct cat facts; identified overarching themes in cat-related knowledge.
+    - Extended Abeer Shariff’s Open Library Authors example with analysis of author productivity vs. top work popularity.

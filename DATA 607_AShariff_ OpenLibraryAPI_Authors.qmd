@@ -139,3 +139,170 @@ anno_data |>
 ## Conclusion:
 
 -   The Authors API search that is apart of "Open Library" does not include all titles of books written but the author, instead it views the top rated ones. Also, the search may be limited, providing only a few titles when the author is searched.
+-   
+
+## Extension by Haneefah Sebro: Introduction & Code
+
+For this extension, I would like to answer the following question:
+
+Do authors associated with widely shared top works tend to have higher or lower work counts (or do authors associated with widely shared top works correlate with higher levels of "productivity")?
+
+```{r}
+library(purrr)
+library(ggplot2)
+
+letters
+```
+
+```{r}
+
+all_letters <- letters
+
+current_author_list_by_letter <- list()
+unique_author_ids <- character()
+
+for (letter in all_letters) {
+  
+  initial_res <- 
+    request("https://openlibrary.org/search/authors.json") |>
+    
+    req_url_query(
+      q = letter, 
+      limit = 500) |>
+    
+    req_perform() |>
+    resp_body_json() |>
+    pluck("docs") |>
+    map_dfr(
+      ~ tibble(
+        key = .x$key,
+        name = .x$name,
+        top_work = .x$top_work,
+        work_count = .x$work_count
+        ))
+  
+  unduplicated_res <-
+    initial_res |>
+    filter(!(key %in% unique_author_ids))
+  
+  unique_author_ids <-
+    c(unique_author_ids, unduplicated_res$key)
+  
+  current_author_list_by_letter[[letter]] <-
+    unduplicated_res
+  
+}
+
+final_author_list <-
+  bind_rows(current_author_list_by_letter)
+
+glimpse(final_author_list)
+
+```
+
+```{r}
+nrow(
+  final_author_list |>
+    distinct(key)
+  )
+
+nrow(final_author_list)
+```
+
+```{r}
+top_work_author_counts <-
+  final_author_list |>
+  filter(!is.na(top_work)) |>
+  count(top_work) |>
+  rename(author_count = n)
+
+glimpse(
+  top_work_author_counts |>
+  arrange(desc(author_count))
+)
+```
+
+```{r}
+author_with_top_work_popularity <-
+  final_author_list |>
+  left_join(top_work_author_counts, by = "top_work")
+
+glimpse(author_with_top_work_popularity
+      )
+```
+
+```{r}
+author_productivity_by_top_work_popularity <-
+  author_with_top_work_popularity |>
+  
+  mutate(
+    popularity_group = 
+      case_when(
+        author_count == 1 ~ "Only 1 Top Work",
+        author_count <= 5 ~ "2-5 Shared Top Works",
+        author_count <= 9  ~ "6-9 Shared Top Works",
+        author_count >=10 ~ "10+ Shared Top Works"
+        ),
+    
+    popularity_group = factor(
+      popularity_group,
+      levels = c(
+        "Only 1 Top Work",
+        "2-5 Shared Top Works",
+        "6-9 Shared Top Works",
+        "10+ Shared Top Works"
+        ))
+    ) |>
+  
+  group_by(popularity_group) |>
+  
+  summarise(
+    mean_work_count = mean(work_count, na.rm = TRUE),
+    median_work_count = median(work_count, na.rm = TRUE),
+    n_authors = n(),
+    .groups = "drop"
+    )
+
+author_productivity_by_top_work_popularity
+
+```
+
+```{r}
+ggplot(
+  author_productivity_by_top_work_popularity,
+  aes(
+    x = popularity_group, 
+    y = mean_work_count)) +
+  
+  geom_col(fill = "blue") +
+
+  labs(
+    title = "Mean Author Productivity by Top Work Popularity",
+    x = "Top Work Popularity Category",
+    y = "Mean Number of Works"
+    )
+```
+
+```{r}
+ggplot(
+  author_productivity_by_top_work_popularity,
+  aes(
+    x = popularity_group, 
+    y = median_work_count)) +
+  
+  geom_col(fill = "blue") +
+
+  labs(
+    title = "Median Author Productivity by Top Work Popularity",
+    x = "Top Work Popularity Category",
+    y = "Median Number of Works"
+    )
+```
+
+## Extension by Haneefah Sebro: Coding Approach
+
+In order to get a good sample size, I created a for loop that would iterate through each of the 26 letters of the alphabet, and grab the first 500 distinct authors (identified by their unique "key") that had that letter in their name. In order to ensure that authors were not duplicated, a string containing all unique keys was maintained throughout the for loop so as to compare any potential new key with all the keys already collected and if matched, discard that key (and thus, that author) and move on to the next key/author until either 500 distinct keys had been collected for that letter, or the maximum number of authors with the given letter in their name had been exhausted. After confirming that the list had all distinct keys (that is, that **nrow( final_author_list \|\> distinct(key) ) == nrow(final_author_list)**), I created the *top_work_author_counts* table and left joined it onto the *original final_author_list* (which contained the original *work_count* variable). This brought both count variables (*work_count* and the *author_count* variable from the newly created *top_work_author_counts* table) together into a single table, *author_with_top_work_popularity*. I then separated all 12,074 distinct authors into four groups based on the number of authors sharing their top work: **Only 1 Top Work**, **2-5 Shared Top Works**, **6-9 Shared Top Works**, and **10+ Shared Top Works**. Lastly, I summarized mean and median statistics for each category and plotted bar plots so as to visualize the relationship between top work popularity and author productivity (i.e. work_counts).
+
+## Extension by Haneefah Sebro: Conclusion
+
+The results suggest a clear relationship between the popularity of an author’s top work and their overall productivity. Authors in the *Only 1 Top Work* group tend to have fewer works, with a median of 29 and a mean of approximately 62. Authors with top works shared among 2–5 other authors show slightly higher productivity, and those with top works shared by 6–9 authors are even more productive. Most notably are authors associated with top works shared by 10 or more authors exhibit substantially higher productivity: with a median of 176 works and a mean of 179, these findings suggest that widely shared top works are strongly (positively) correlated with "highly productive authors."
