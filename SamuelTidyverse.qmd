@@ -1,0 +1,110 @@
+---
+title: "Weatherstack API: Comparing Current Temperatures Across Major U.S. Cities"
+author: "Samuel Dosky"
+format: pdf
+editor: visual
+---
+
+# 1. Overview: API description and research question
+
+The Weatherstack API provides real-time weather data for locations around the world. It returns current conditions (such as temperature, humidity, and wind speed) in JSON format via standard HTTP requests, which makes it convenient to access from R using the `httr2` package.
+
+In this vignette, I use the Weatherstack **current weather** endpoint to retrieve current temperature observations for several major U.S. cities and visualize the results.
+
+**Research Question:**\
+*How do current temperatures compare across major U.S. cities?*
+
+# 2. Using httr2 to download data and tidyverse to analyze it
+
+```{r}
+library(httr2)
+library(dplyr)
+library(purrr)
+library(ggplot2)
+```
+
+```{r}
+key <- Sys.getenv("WEATHERSTACK_KEY")
+stopifnot(nchar(key) > 0)
+```
+
+```{r}
+cities <- c(
+  "New York, NY",
+  "Los Angeles, CA",
+  "Chicago, IL",
+  "Houston, TX",
+  "Phoenix, AZ",
+  "Philadelphia, PA",
+  "San Antonio, TX",
+  "San Diego, CA",
+  "Dallas, TX",
+  "San Jose, CA",
+  "Boston, MA",
+  "Miami, FL",
+  "Seattle, WA",
+  "Denver, CO"
+)
+```
+
+```{r}
+get_city_weather <- function(city_query) {
+
+  Sys.sleep(1)  # pause 1 second to avoid rate limiting
+
+  req <- request("http://api.weatherstack.com/current") |>
+    req_url_query(
+      access_key = key,
+      query = city_query,
+      units = "f"
+    )
+
+  resp <- req |> req_perform()
+  body <- resp |> resp_body_json()
+
+  if (!is.null(body$error)) {
+    stop(paste0("Weatherstack error for ", city_query, ": ", body$error$info))
+  }
+
+  tibble(
+    city      = body$location$name,
+    region    = body$location$region,
+    temp_f    = body$current$temperature,
+    humidity  = body$current$humidity,
+    wind_mph  = body$current$wind_speed
+  )
+}
+
+```
+
+```{r}
+df <- map_dfr(cities, get_city_weather)
+df
+```
+
+```{r}
+ggplot(df, aes(x = reorder(city, temp_f), y = temp_f)) +
+  geom_col() +
+  coord_flip() +
+  labs(
+    title = "Current temperatures across major U.S. cities (Weatherstack)",
+    x = NULL,
+    y = "Temperature (°F)"
+  )
+```
+
+```{r}
+names(df)
+```
+
+```{r}
+df |>
+  arrange(desc(temp_f)) |>
+  select(city, region, temp_f, humidity, wind_mph)
+```
+
+Conclusion
+
+The visualization shows meaningful differences in current temperatures across major U.S. cities at the time of the API call. These differences likely reflect regional climate patterns (e.g., coastal vs inland), local weather systems, and seasonal conditions.
+
+This vignette demonstrates how to use httr2 to request data from a public API and how tidyverse tools can structure and visualize the results. A natural extension would be to compare temperatures with other variables (such as humidity or wind), or to repeat the data collection at different times to see how rankings change.
